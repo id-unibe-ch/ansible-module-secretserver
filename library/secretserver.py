@@ -13,7 +13,6 @@ import requests
 from ansible.module_utils.common.text.converters import to_text
 from ansible.module_utils.basic import AnsibleModule
 
-
 DOCUMENTATION = r'''
 ---
 module: my_test
@@ -80,6 +79,7 @@ message:
 base_url = None
 authenticated_headers = None
 
+
 class Auth:
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -110,7 +110,6 @@ class Auth:
     def _get_initial_token(self):
         url = f"{self._base_url}oauth2/token"
         data = f"grant_type=password&username={self._user_name}&password={self._password}"
-        print(f"data is {data}")
         response = requests.request(
             "POST",
             url,
@@ -140,30 +139,42 @@ class Auth:
         return self._access_token
 
 
-def search_by_name(search_text: str) -> list:
+def search_by_name(search_text: str) -> list | dict:
     url = f"{base_url}api/v2/secrets?filter.searchText={search_text}"
     response = requests.request("GET", url, headers=authenticated_headers, data={})
-    json_data = json.loads(response.text)
-    records_list = []
-    if "records" in json_data:
-        for record in json_data["records"]:
-            records_list.append({"name": to_text(record["name"]), "id": to_text(record["id"])})
-    return records_list if len(records_list) > 1 or len(records_list) == 0 \
-        else lookup_single_secret(
-        records_list[0]["id"])
+    if response.status_code == 200:
+        json_data = json.loads(response.text)
+        records_list = []
+        if "records" in json_data:
+            for record in json_data["records"]:
+                records_list.append({"name": to_text(record["name"]), "id": to_text(record["id"])})
+        return {"success": True, "content": records_list} if len(records_list) > 1 or len(records_list) == 0 \
+            else lookup_single_secret(
+            records_list[0]["id"])
+    else:
+        return {"success": False,
+                "status": response.status_code,
+                "text": response.text
+                }
 
 
-def lookup_single_secret(secret_id: int) -> list:
+def lookup_single_secret(secret_id: int) -> dict:
     url = f"{base_url}api/v2/secrets/{secret_id}"
     response = requests.request("GET", url, headers=authenticated_headers, data={})
-    json_data = json.loads(response.text)
-    response = {}
-    if "id" in json_data:
-        response["id"] = to_text(json_data['id'])
-        response["name"] = to_text(json_data["name"])
-        for item in json_data["items"]:
-            response[to_text(item["fieldName"])] = to_text(item["itemValue"])
-    return response
+    if response.status_code == 200:
+        json_data = json.loads(response.text)
+        content = {}
+        if "id" in json_data:
+            content["id"] = to_text(json_data['id'])
+            content["name"] = to_text(json_data["name"])
+            for item in json_data["items"]:
+                content[to_text(item["fieldName"])] = to_text(item["itemValue"])
+        return {"success": True, "content": content}
+    else:
+        return {"success": False,
+                "status": response.status_code,
+                "text": response.text
+                }
 
 
 def create_secret(
@@ -585,24 +596,31 @@ def main():
                 "Accept": "application/json",
                 "Authorization": f"Bearer {client.get_token()}"
             }
-        except:
-            module.fail_json(msg=f"could not log into Secret Server:", **result)
+        except Exception as e:
+            module.fail_json(msg=f"could not log into Secret Server: {e}", **result)
         if not authenticated_headers:
             module.fail_json(msg=f"error authenticating with the Secret Server", **result)
 
     # executing the action
     if action == "get":
-        result["content"] = lookup_single_secret(int(module.params.get("secret_id")))
-        module.exit_json(**result)
+        res = lookup_single_secret(int(module.params.get("secret_id")))
+        if res.get("success"):
+            result["content"] = res.get("content")
+            module.exit_json(**result)
+        else:
+            module.fail_json(msg=f"error getting secret {res}", **result)
 
     elif action == "search":
-        result["content"] = search_by_name(module.params.get("search_text"))
-        module.exit_json(**result)
+        res = search_by_name(module.params.get("search_text"))
+        if res.get("success"):
+            result["content"] = res.get("content")
+            module.exit_json(**result)
+        else:
+            module.fail_json(msg=f"error searching for secret {res}", **result)
 
     elif action == "upsert":
         if module.check_mode:
             module.exit_json(**result)
-
 
 
 if __name__ == '__main__':
