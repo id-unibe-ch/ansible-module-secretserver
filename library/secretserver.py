@@ -109,7 +109,6 @@ class Auth:
 
     def _get_initial_token(self):
         url = f"{self._base_url}oauth2/token"
-        print(f"url is {url}")
         data = f"grant_type=password&username={self._user_name}&password={self._password}"
         print(f"data is {data}")
         response = requests.request(
@@ -142,8 +141,8 @@ class Auth:
 
 
 def search_by_name(search_text: str) -> list:
-    url = f"{config['base_url']}api/v2/secrets?filter.searchText={search_text}"
-    response = requests.request("GET", url, headers=headers, data={})
+    url = f"{base_url}api/v2/secrets?filter.searchText={search_text}"
+    response = requests.request("GET", url, headers=authenticated_headers, data={})
     json_data = json.loads(response.text)
     records_list = []
     if "records" in json_data:
@@ -156,7 +155,6 @@ def search_by_name(search_text: str) -> list:
 
 def lookup_single_secret(secret_id: int) -> list:
     url = f"{base_url}api/v2/secrets/{secret_id}"
-    print(f"url is {url}")
     response = requests.request("GET", url, headers=authenticated_headers, data={})
     json_data = json.loads(response.text)
     response = {}
@@ -438,7 +436,6 @@ def create_secret(
 
 def update_secret_by_id(secret_id: str, updated_password: str) -> list:
     url = f"{config['base_url']}api/v1/secrets/{secret_id}/fields/password"
-    print(f"url is {url}")
     payload = json.dumps({
         "password": updated_password,
         "id": secret_id
@@ -514,7 +511,7 @@ def main():
         secretserver_username=dict(type='str', required=True),
         secretserver_base_url=dict(type='str', required=True),
         action=dict(type='str', required=True),
-        searchtext=dict(type='str', required=False),
+        search_text=dict(type='str', required=False),
         secret_id=dict(type='int', required=False),
         folder_id=dict(type='int', required=False),
         type=dict(type='str', required=False),
@@ -561,6 +558,10 @@ def main():
         if module.params.get("secret_id") is None or not int(module.params.get("secret_id")):
             module.fail_json(msg="secret_id is mandatory for action 'get'", **result)
 
+    elif action == "search":
+        if module.params.get("search_text") is None or len(module.params.get("search_text")) < 1:
+            module.fail_json(msg="You must specify a search_text to use the search function", **result)
+
     # Authenticating with the Secret Server
     try:
         global base_url
@@ -585,7 +586,8 @@ def main():
         module.exit_json(**result)
 
     elif action == "search":
-        pass
+        result["content"] = search_by_name(module.params.get("search_text"))
+        module.exit_json(**result)
 
     elif action == "upsert":
         if module.check_mode:
