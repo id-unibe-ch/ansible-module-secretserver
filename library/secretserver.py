@@ -121,7 +121,6 @@ class Auth:
         self._access_token = response_data.get("access_token")
         self._token_valid_until = datetime.datetime.now() + datetime.timedelta(
             seconds=(response_data.get("expires_in") - 10))
-        print(f"access token is {self._access_token}")
         return self._access_token
 
     def _refresh_access_token(self):
@@ -170,7 +169,7 @@ def lookup_single_secret(secret_id: int) -> dict:
             content["folder_id"] = to_text(json_data.get("folderId"))
             for item in json_data.get("items"):
                 content[to_text(item.get("fieldName"))] = to_text(item.get("itemValue"))
-        return {"success": True, "content": json_data}
+        return {"success": True, "content": content}
     else:
         return {"success": False,
                 "status": response.status_code,
@@ -180,10 +179,8 @@ def lookup_single_secret(secret_id: int) -> dict:
 
 def create_secret(
         secret_name: str, user_name: str, password: str, folder_id: int, connection_string: str,
-        url: str, secret_type: str, notes: str, fqdn: str, logon_domain: str
-) -> list:
-    if folder_id == -1:
-        raise AnsibleError("You must specify a folder ID to create a secret")
+        url: str, secret_type: str, notes: str, fqdn: str, logon_domain: str, database: str
+) -> dict:
     type_mapping = {"generic": {
         "template_id": 6010,
         "items": [
@@ -341,6 +338,20 @@ def create_secret(
                 "itemValue": connection_string,
                 "listType": "None",
                 "slug": "connection-string"
+            },
+            {
+                "fieldDescription": "The Database name or instance.",
+                "fieldId": 138,
+                "fieldName": "Database",
+                "fileAttachmentId": 0,
+                "filename": "",
+                "isFile": False,
+                "isList": False,
+                "isNotes": False,
+                "isPassword": False,
+                "itemValue": database,
+                "listType": "None",
+                "slug": "database"
             }
         ]
 
@@ -419,9 +430,6 @@ def create_secret(
     }
     }
 
-    if secret_type not in type_mapping.keys():
-        raise AnsibleError(f"Secret_type {secret_type} unknown")
-
     payload = {
         "name": secret_name,
         "secretTemplateId": type_mapping.get(secret_type).get("template_id"),
@@ -435,18 +443,22 @@ def create_secret(
         "sessionRecordingEnabled": False
     }
 
-    response = requests.request("POST", f"{base_url}api/v1/secrets", headers={
+    response = requests.request(method="POST", url=f"{base_url}api/v1/secrets", headers={
         **authenticated_headers,
         "Content-Type": "application/json"}, data=json.dumps(payload))
 
+    json_data = json.loads(response.text)
     if response.status_code == 200:
-        return json.loads(response.text).get("id")
+        return {"success": True,
+                "data": {
+                    "secret_id": json_data.get("id")
+                }
+                }
     else:
-        print(f"status: {response.status_code}")
-        print(response.text)
+        return {"success": False, "data": {"code": response.status_code, "payload": json_data}}
 
 
-def update_secret_by_id(secret_id: str, updated_password: str) -> list:
+def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
     url = f"{base_url}api/v1/secrets/{secret_id}/fields/password"
     payload = json.dumps({
         "password": updated_password,
@@ -456,10 +468,7 @@ def update_secret_by_id(secret_id: str, updated_password: str) -> list:
         **authenticated_headers,
         "Content-Type": "application/json"},
                                 data=payload)
-    print(f"status: {response.status_code}")
-    print(response.text)
-    if response.status_code != 200:
-        raise AnsibleError(f"Error updating secret {secret_id}: {response.text}")
+    return {"code": response.status_code, "text": response.text}
 
 
 def update_secret(secret_name: str,
@@ -467,42 +476,44 @@ def update_secret(secret_name: str,
                   password: str,
                   folder_id: int,
                   connection_string: str,
+                  database: str,
                   url: str,
                   secret_type: str,
                   notes: str,
                   fqdn: str,
                   logon_domain: str,
-                  secret_id: str = None
-                  ) -> list:
-    display.display("updating secret")
-    if secret_id is not None:
+                  secret_id: int
+                  ) -> dict:
+    if secret_id is not None and secret_id > 0:
         return update_secret_by_id(
             secret_id=secret_id,
             updated_password=password
         )
     else:
         search_result = search_by_name(secret_name)
-        print(search_result)
-        if len(search_result) == 1:
-            current_secret = search_result[0]
-            if current_secret["Username"] == user_name:
-                update_secret_by_id(
-                    secret_id=current_secret["id"],
-                    updated_password=password
-                )
-            else:
-                return create_secret(secret_name=secret_name,
-                                     user_name=user_name,
-                                     password=password,
-                                     folder_id=folder_id,
-                                     connection_string=connection_string,
-                                     url=url,
-                                     secret_type=secret_type,
-                                     notes=notes,
-                                     fqdn=fqdn,
-                                     logon_domain=logon_domain
-                                     )
-        elif len(search_result) == 0:
+        print(f"search_result is {search_result}")
+        if search_result.get('success') and len(search_result.get('content')):
+            if(len(search_result.get('content'))) == 1:
+                current_secret = search_result.get('content')[0]
+                if current_secret.get("Username") == user_name and current_secret.get("folder_id") == folder_id:
+                    update_secret_by_id(
+                        secret_id=current_secret["id"],
+                        updated_password=password
+                    )
+                else:
+                    return create_secret(secret_name=secret_name,
+                                         user_name=user_name,
+                                         password=password,
+                                         folder_id=folder_id,
+                                         connection_string=connection_string,
+                                         url=url,
+                                         secret_type=secret_type,
+                                         notes=notes,
+                                         fqdn=fqdn,
+                                         logon_domain=logon_domain,
+                                         database=database
+                                         )
+        elif len(search_result.get('content')) == 0:
             return create_secret(secret_name=secret_name,
                                  user_name=user_name,
                                  password=password,
@@ -512,15 +523,19 @@ def update_secret(secret_name: str,
                                  secret_type=secret_type,
                                  notes=notes,
                                  fqdn=fqdn,
-                                 logon_domain=logon_domain
+                                 logon_domain=logon_domain,
+                                 database=database
                                  )
+        else:
+            return {"changed": False, "reason": "Secret name not unique", "search_result": search_result}
 
 
 def main():
+    print("executing main")
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
-        secertserver_password=dict(type='str', required=False, no_log=True, ),
-        secertserver_token=dict(type='str', required=False, no_log=True, ),
+        secertserver_password=dict(type='str', required=False, no_log=True),
+        secertserver_token=dict(type='str', required=False, no_log=True),
         secretserver_username=dict(type='str', required=True),
         secretserver_base_url=dict(type='str', required=True),
         action=dict(type='str', required=True),
@@ -529,7 +544,8 @@ def main():
         folder_id=dict(type='int', required=False),
         type=dict(type='str', required=False),
         secret_name=dict(type='str', required=False),
-        password=dict(type='str', required=False, no_log=True, ),
+        user_name=dict(type='str', required=False),
+        password=dict(type='str', required=False, no_log=True),
         database=dict(type='str', required=False),
         connection_string=dict(type='str', required=False),
         url=dict(type='str', required=False),
@@ -574,6 +590,28 @@ def main():
     elif action == "search":
         if module.params.get("search_text") is None or len(module.params.get("search_text")) < 1:
             module.fail_json(msg="You must specify a search_text to use the search function", **result)
+
+    elif action == "upsert":
+        for key in ["secret_name", "user_name", "password", "folder_id", "type"]:
+            if module.params.get(key) is None:
+                module.fail_json(msg=f"You must specify a {key} to use the upsert function", **result)
+        if not int(module.params.get("folder_id")):
+            module.fail_json(msg=f"the folder_id must be parseable to an integer", **result)
+        if module.params.get("secret_id") and not int(module.params.get("secret_id")):
+            module.fail_json(msg=f"the secret_id must be parseable to an integer", **result)
+
+        if module.params.get("secret_type"):
+            secret_type = module.params.get("secret_type")
+            acceptable_types = {"server": ["secret_name", "user_name", "password"],
+                                "database": ["secret_name", "database", "user_name", "password"],
+                                "website": ["secret_name", "url", "user_name", "password"],
+                                "generic": ["secret_name", "user_name", "password"]
+                                }
+            if secret_type not in acceptable_types.keys:
+                module.fail_json(msg=f"the secret type must be one of {', '.join(acceptable_types)}", **result)
+            for field in acceptable_types.get(secret_type):
+                if module.params.get(field) is None:
+                    module.fail_json(msg=f"you must specify {field} to upsert a {secret_type}", **result)
 
     # Authenticating with the Secret Server
     global base_url
@@ -620,9 +658,34 @@ def main():
             module.fail_json(msg=f"error searching for secret {res}", **result)
 
     elif action == "upsert":
+        print("executing upsert")
         if module.check_mode:
+            result["comment"] = "Upsert will do nothing in check mode"
             module.exit_json(**result)
+        else:
+            res = update_secret(secret_name=module.params.get("secret_name"),
+                                user_name=module.params.get("user_name"),
+                                password=module.params.get("password"),
+                                folder_id=int(module.params.get("folder_id")),
+                                connection_string=module.params.get("connection_string"),
+                                url=module.params.get("url"),
+                                database=module.params.get("database"),
+                                secret_type=module.params.get("type"),
+                                notes=module.params.get("notes"),
+                                fqdn=module.params.get("fqdn"),
+                                logon_domain=module.params.get("logon_domain"),
+                                secret_id=int(module.params.get("secret_id", -1)
+                                              if module.params.get("secret_id", -1) is not None else -1)
+                                )
+            if not res.get("success"):
+                module.fail_json(msg=f"error upserting secret {res}", **result)
+
+            else:
+                result["data"] = res.get("data")
+                result["changed"] = True
+                module.exit_json(**result)
 
 
 if __name__ == '__main__':
+    print("entrypoint")
     main()
