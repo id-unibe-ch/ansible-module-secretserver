@@ -88,8 +88,8 @@ class Auth:
 
     def __init__(self, config):
         self._base_url = base_url
-        self._user_name = config["user_name"]
-        self._password = config["password"]
+        self._user_name = config.get("user_name")
+        self._password = config.get("password")
         self._token_valid_until = None
         self._access_token = None
         self._refresh_token = None
@@ -117,10 +117,10 @@ class Auth:
             data=data
         )
         response_data = response.json()
-        self._refresh_token = response_data["refresh_token"]
-        self._access_token = response_data["access_token"]
+        self._refresh_token = response_data.get("refresh_token")
+        self._access_token = response_data.get("access_token")
         self._token_valid_until = datetime.datetime.now() + datetime.timedelta(
-            seconds=(response_data["expires_in"] - 10))
+            seconds=(response_data.get("expires_in") - 10))
         print(f"access token is {self._access_token}")
         return self._access_token
 
@@ -132,10 +132,10 @@ class Auth:
             data=f"grant_type=refresh_token&refresh_token={self._refresh_token}"
         )
         response_data = response.json()
-        self._refresh_token = response_data["refresh_token"]
-        self._access_token = response_data["access_token"]
+        self._refresh_token = response_data.get("refresh_token")
+        self._access_token = response_data.get("access_token")
         self._token_valid_until = datetime.datetime.now() + datetime.timedelta(
-            seconds=(response_data["expires_in"] - 10))
+            seconds=(response_data.get("expires_in") - 10))
         return self._access_token
 
 
@@ -146,11 +146,11 @@ def search_by_name(search_text: str) -> list | dict:
         json_data = json.loads(response.text)
         records_list = []
         if "records" in json_data:
-            for record in json_data["records"]:
-                records_list.append({"name": to_text(record["name"]), "id": to_text(record["id"])})
+            for record in json_data.get("records"):
+                records_list.append({"name": to_text(record.get("name")), "id": to_text(record.get("id"))})
         return {"success": True, "content": records_list} if len(records_list) > 1 or len(records_list) == 0 \
             else lookup_single_secret(
-            records_list[0]["id"])
+            records_list[0].get("id"))
     else:
         return {"success": False,
                 "status": response.status_code,
@@ -165,11 +165,12 @@ def lookup_single_secret(secret_id: int) -> dict:
         json_data = json.loads(response.text)
         content = {}
         if "id" in json_data:
-            content["id"] = to_text(json_data['id'])
-            content["name"] = to_text(json_data["name"])
-            for item in json_data["items"]:
-                content[to_text(item["fieldName"])] = to_text(item["itemValue"])
-        return {"success": True, "content": content}
+            content["id"] = to_text(json_data.get('id'))
+            content["name"] = to_text(json_data.get("name"))
+            content["folder_id"] = to_text(json_data.get("folderId"))
+            for item in json_data.get("items"):
+                content[to_text(item.get("fieldName"))] = to_text(item.get("itemValue"))
+        return {"success": True, "content": json_data}
     else:
         return {"success": False,
                 "status": response.status_code,
@@ -434,25 +435,25 @@ def create_secret(
         "sessionRecordingEnabled": False
     }
 
-    response = requests.request("POST", f"{config['base_url']}api/v1/secrets", headers={
-        **headers,
+    response = requests.request("POST", f"{base_url}api/v1/secrets", headers={
+        **authenticated_headers,
         "Content-Type": "application/json"}, data=json.dumps(payload))
 
     if response.status_code == 200:
-        return [json.loads(response.text).get("id")]
+        return json.loads(response.text).get("id")
     else:
         print(f"status: {response.status_code}")
         print(response.text)
 
 
 def update_secret_by_id(secret_id: str, updated_password: str) -> list:
-    url = f"{config['base_url']}api/v1/secrets/{secret_id}/fields/password"
+    url = f"{base_url}api/v1/secrets/{secret_id}/fields/password"
     payload = json.dumps({
         "password": updated_password,
         "id": secret_id
     })
     response = requests.request("PUT", url, headers={
-        **headers,
+        **authenticated_headers,
         "Content-Type": "application/json"},
                                 data=payload)
     print(f"status: {response.status_code}")
