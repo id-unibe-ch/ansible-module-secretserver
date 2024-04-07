@@ -507,7 +507,8 @@ def update_secret(secret_name: str,
 def main():
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
-        secertserver_password=dict(type='str', required=True, no_log=True, ),
+        secertserver_password=dict(type='str', required=False, no_log=True, ),
+        secertserver_token=dict(type='str', required=False, no_log=True, ),
         secretserver_username=dict(type='str', required=True),
         secretserver_base_url=dict(type='str', required=True),
         action=dict(type='str', required=True),
@@ -563,22 +564,31 @@ def main():
             module.fail_json(msg="You must specify a search_text to use the search function", **result)
 
     # Authenticating with the Secret Server
-    try:
-        global base_url
-        base_url = module.params.get("secretserver_base_url")
-        client = Auth({
-            "user_name": module.params.get("secretserver_username"),
-            "password": module.params.get("secertserver_password"),
-        })
-        global authenticated_headers
+    global base_url
+    base_url = module.params.get("secretserver_base_url")
+    global authenticated_headers
+    if module.params.get("secertserver_token") is not None:
         authenticated_headers = {
             "Accept": "application/json",
-            "Authorization": f"Bearer {client.get_token()}"
+            "Authorization": f"Bearer {module.params.get('secertserver_token')}"
         }
-    except:
-        module.fail_json(msg=f"could not log into Secret Server:", **result)
-    if not authenticated_headers:
-        module.fail_json(msg=f"error authenticating with the Secret Server", **result)
+    else:
+        if module.params.get("secertserver_password") is None:
+            module.fail_json(msg="You must pass either secertserver_token or secertserver_password", **result)
+        try:
+            client = Auth({
+                "user_name": module.params.get("secretserver_username"),
+                "password": module.params.get("secertserver_password"),
+            })
+
+            authenticated_headers = {
+                "Accept": "application/json",
+                "Authorization": f"Bearer {client.get_token()}"
+            }
+        except:
+            module.fail_json(msg=f"could not log into Secret Server:", **result)
+        if not authenticated_headers:
+            module.fail_json(msg=f"error authenticating with the Secret Server", **result)
 
     # executing the action
     if action == "get":
