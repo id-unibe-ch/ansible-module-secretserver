@@ -796,18 +796,22 @@ def main():
                 module.exit_json(**result)
 
     elif action == "update":
-        res = update_secret_by_id(
-            secret_id=int(module.params.get("secret_id")),
-            updated_password=module.params.get("password")
-        )
-        print(f"res is {res}")
-        if not res.get("success"):
-            module.fail_json(msg=f"error updating secret {res}", **result)
-
-        else:
-            result["data"] = res.get("text")
-            result["changed"] = True
+        if module.check_mode:
+            result["comment"] = "Upsert will do nothing in check mode"
             module.exit_json(**result)
+        else:
+            res = update_secret_by_id(
+                secret_id=int(module.params.get("secret_id")),
+                updated_password=module.params.get("password")
+            )
+            print(f"res is {res}")
+            if not res.get("success"):
+                module.fail_json(msg=f"error updating secret {res}", **result)
+
+            else:
+                result["data"] = res.get("text")
+                result["changed"] = True
+                module.exit_json(**result)
 
 
 if __name__ == '__main__':
