@@ -15,6 +15,19 @@ curl -X POST "https://secretserver.example.com/SecretServer/oauth2/token" \
 --data-urlencode "password=$PASSWORD
 ````
 
+## Installation
+
+Sadly, custom modules (that are not part of a collection) cannot be installed via ansible-galaxy.
+So the installation process is a bit more tedious.
+If anyone wants to initialize a collection of our own, i'm ready for the PR.
+
+1. Find out where ansible looks for your modules
+   ```bash 
+   ansible-config dump |grep DEFAULT_MODULE_PATH
+   ```
+2. Clone the module to one of those locations
+3. Use the module like any other (without the FQCN because, again, not part of a collection)
+
 ## Parameters
 
 - `secretserver_password`:
