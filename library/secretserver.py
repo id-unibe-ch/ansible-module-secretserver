@@ -486,19 +486,21 @@ def create_secret(
 
 
 def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
-    print("running update_secret_by_id")
     full_secret_response = get_full_secret(secret_id)
-    print(f"got the full secret")
     if full_secret_response.status_code == 200 and full_secret_response.json():
-        print(f"was able to parse the full secret, it is {full_secret_response.text}")
-        url = f"{base_url}secrets/{secret_id}"
-        print(f"url is {url}")
-        response = requests.put(url, json=full_secret_response.json(), headers={
+        previous_secret = full_secret_response.json()
+        previous_items = previous_secret.get("items")
+        for item in previous_items:
+            if item.get("slug") == "password":
+                item["itemValue"] = updated_password
+                break
+        previous_secret["items"] = previous_items
+        url = f"{base_url}api/v1/secrets/{secret_id}"
+        response = requests.put(url, json=previous_secret, headers={
             **authenticated_headers,
             "Content-Type": "application/json"})
-        print(f"have a response, it is {response.status_code}, text {response.text}")
         if response.status_code == 200:
-            return {"success": True, "code": response.status_code, "text": response.text}
+            return {"success": True, "code": response.status_code, "text": {"secret_id": response.json().get("id")}}
         else:
             return {"success": False, "code": response.status_code, "text": response.text}
     else:
@@ -575,64 +577,57 @@ def update_secret(secret_name: str,
                   secret_type: str,
                   notes: str,
                   fqdn: str,
-                  logon_domain: str,
-                  secret_id: int
+                  logon_domain: str
                   ) -> dict:
-    if secret_id is not None and secret_id > 0:
-        return update_secret_by_id(
-            secret_id=secret_id,
-            updated_password=password
-        )
+    search_result = search_by_name(secret_name)
+    # print(f"search_result is {search_result}")
+    if search_result.get('success'):
+        if isinstance(search_result.get('content'), dict):
+            # print("we have success and a dict")
+            current_secret = search_result.get('content')
+            # print(f'current user name is {current_secret.get("Username")}, looking for {user_name}, they are equal {current_secret.get("Username") == user_name}')
+            # print(f'current folder {current_secret.get("folder_id")}, looking for {folder_id}, they are equal {int(current_secret.get("folder_id")) == folder_id}')
+            if current_secret.get("Username") == user_name and int(current_secret.get("folder_id")) == folder_id:
+                # print("must update secret")
+                return update_secret_by_body(secret_name=secret_name,
+                                             user_name=user_name,
+                                             password=password,
+                                             folder_id=folder_id,
+                                             connection_string=connection_string,
+                                             url=url,
+                                             secret_type=secret_type,
+                                             notes=notes,
+                                             fqdn=fqdn,
+                                             logon_domain=logon_domain,
+                                             database=database,
+                                             secret_id=int(current_secret["id"]))
+            else:
+                return {"success": False,
+                        "reason": "We found a secret by that name, but not in the folder you specified. "
+                                  f"Aborting to avoid overwriting the wrong secret. "
+                                  f"was {current_secret.get('folder_id')}, you specified {folder_id}, "
+                                  f"username was {current_secret.get('Username')}, you specified {user_name}",
+                        "search_result": search_result}
+        elif isinstance(search_result.get('content'), list):
+            print("we have a list")
+            print(f"its len is {len(search_result.get('content'))}")
+            if len(search_result.get('content')) == 0:
+                return create_secret(secret_name=secret_name,
+                                     user_name=user_name,
+                                     password=password,
+                                     folder_id=folder_id,
+                                     connection_string=connection_string,
+                                     url=url,
+                                     secret_type=secret_type,
+                                     notes=notes,
+                                     fqdn=fqdn,
+                                     logon_domain=logon_domain,
+                                     database=database
+                                     )
+            else:
+                return {"success": False, "reason": "Secret name not unique", "search_result": search_result}
     else:
-        search_result = search_by_name(secret_name)
-        # print(f"search_result is {search_result}")
-        if search_result.get('success'):
-            if isinstance(search_result.get('content'), dict):
-                # print("we have success and a dict")
-                current_secret = search_result.get('content')
-                # print(f'current user name is {current_secret.get("Username")}, looking for {user_name}, they are equal {current_secret.get("Username") == user_name}')
-                # print(f'current folder {current_secret.get("folder_id")}, looking for {folder_id}, they are equal {int(current_secret.get("folder_id")) == folder_id}')
-                if current_secret.get("Username") == user_name and int(current_secret.get("folder_id")) == folder_id:
-                    # print("must update secret")
-                    return update_secret_by_body(secret_name=secret_name,
-                                                 user_name=user_name,
-                                                 password=password,
-                                                 folder_id=folder_id,
-                                                 connection_string=connection_string,
-                                                 url=url,
-                                                 secret_type=secret_type,
-                                                 notes=notes,
-                                                 fqdn=fqdn,
-                                                 logon_domain=logon_domain,
-                                                 database=database,
-                                                 secret_id=int(current_secret["id"]))
-                else:
-                    return {"success": False,
-                            "reason": "We found a secret by that name, but not in the folder you specified. "
-                                      f"Aborting to avoid overwriting the wrong secret. "
-                                      f"was {current_secret.get('folder_id')}, you specified {folder_id}, "
-                                      f"username was {current_secret.get('Username')}, you specified {user_name}",
-                            "search_result": search_result}
-            elif isinstance(search_result.get('content'), list):
-                print("we have a list")
-                print(f"its len is {len(search_result.get('content'))}")
-                if len(search_result.get('content')) == 0:
-                    return create_secret(secret_name=secret_name,
-                                         user_name=user_name,
-                                         password=password,
-                                         folder_id=folder_id,
-                                         connection_string=connection_string,
-                                         url=url,
-                                         secret_type=secret_type,
-                                         notes=notes,
-                                         fqdn=fqdn,
-                                         logon_domain=logon_domain,
-                                         database=database
-                                         )
-                else:
-                    return {"success": False, "reason": "Secret name not unique", "search_result": search_result}
-        else:
-            return {"success": False, "reason": "Could not lookup if secret exists", "search_result": search_result}
+        return {"success": False, "reason": "Could not lookup if secret exists", "search_result": search_result}
 
 
 def main():
@@ -683,7 +678,7 @@ def main():
         module.exit_json(**result)
 
     # input validation
-    permitted_actions = ["search", "get", "upsert"]
+    permitted_actions = ["search", "get", "upsert", "update"]
     if module.params.get("action") not in permitted_actions:
         module.fail_json(msg=f'Action must be one of {", ".join(permitted_actions)}', **result)
 
@@ -717,6 +712,12 @@ def main():
             for field in acceptable_types.get(secret_type):
                 if module.params.get(field) is None:
                     module.fail_json(msg=f"you must specify {field} to upsert a {secret_type}", **result)
+
+    elif action == "update":
+        mandatory_fields = ["secret_id", "password"]
+        for field in mandatory_fields:
+            if not module.params.get(field):
+                module.fail_json(msg=f"you must specify {field} to update an item", **result)
 
     # Authenticating with the Secret Server
     global base_url
@@ -778,9 +779,7 @@ def main():
                                 secret_type=module.params.get("type"),
                                 notes=module.params.get("notes"),
                                 fqdn=module.params.get("fqdn"),
-                                logon_domain=module.params.get("logon_domain"),
-                                secret_id=int(module.params.get("secret_id", -1)
-                                              if module.params.get("secret_id", -1) is not None else -1)
+                                logon_domain=module.params.get("logon_domain")
                                 )
             print(f"res is {res}")
             if not res.get("success"):
@@ -790,6 +789,20 @@ def main():
                 result["data"] = res.get("data")
                 result["changed"] = True
                 module.exit_json(**result)
+
+    elif action == "update":
+        res = update_secret_by_id(
+            secret_id=int(module.params.get("secret_id")),
+            updated_password=module.params.get("password")
+        )
+        print(f"res is {res}")
+        if not res.get("success"):
+            module.fail_json(msg=f"error updating secret {res}", **result)
+
+        else:
+            result["data"] = res.get("text")
+            result["changed"] = True
+            module.exit_json(**result)
 
 
 if __name__ == '__main__':
