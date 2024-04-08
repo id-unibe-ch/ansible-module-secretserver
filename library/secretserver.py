@@ -634,8 +634,8 @@ def main():
     print("executing main")
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
-        secertserver_password=dict(type='str', required=False, no_log=True),
-        secertserver_token=dict(type='str', required=False, no_log=True),
+        secretserver_password=dict(type='str', required=False, no_log=True),
+        secretserver_token=dict(type='str', required=False, no_log=True),
         secretserver_username=dict(type='str', required=True),
         secretserver_base_url=dict(type='str', required=True),
         action=dict(type='str', required=True),
@@ -723,18 +723,18 @@ def main():
     global base_url
     base_url = module.params.get("secretserver_base_url")
     global authenticated_headers
-    if module.params.get("secertserver_token") is not None:
+    if module.params.get("secretserver_token") is not None:
         authenticated_headers = {
             "Accept": "application/json",
-            "Authorization": f"Bearer {module.params.get('secertserver_token')}"
+            "Authorization": f"Bearer {module.params.get('secretserver_token')}"
         }
     else:
-        if module.params.get("secertserver_password") is None:
-            module.fail_json(msg="You must pass either secertserver_token or secertserver_password", **result)
+        if module.params.get("secretserver_password") is None:
+            module.fail_json(msg="You must pass either secretserver_token or secretserver_password", **result)
         try:
             client = Auth({
                 "user_name": module.params.get("secretserver_username"),
-                "password": module.params.get("secertserver_password"),
+                "password": module.params.get("secretserver_password"),
             })
 
             authenticated_headers = {
@@ -742,7 +742,12 @@ def main():
                 "Authorization": f"Bearer {client.get_token()}"
             }
         except Exception as e:
-            module.fail_json(msg=f"could not log into Secret Server: {e}", **result)
+            if type(e) == type(TypeError) and str(e) == "unsupported operand type(s) for -: 'NoneType' and 'int'":
+                module.fail_json(msg="could not log into Secret Server. "
+                                     "This is most likely because you specified the wrong username/password combination"
+                                 , **result)
+            else:
+                module.fail_json(msg=f"could not log into Secret Server: {e}, {type(e)}, :{str(e)}:", **result)
         if not authenticated_headers:
             module.fail_json(msg=f"error authenticating with the Secret Server", **result)
 
