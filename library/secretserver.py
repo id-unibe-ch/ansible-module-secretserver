@@ -138,49 +138,18 @@ class Auth:
         return self._access_token
 
 
-def search_by_name(search_text: str) -> list | dict:
-    url = f"{base_url}api/v2/secrets?filter.searchText={search_text}"
-    response = requests.request("GET", url, headers=authenticated_headers, data={})
-    if response.status_code == 200:
-        json_data = json.loads(response.text)
-        records_list = []
-        if "records" in json_data:
-            for record in json_data.get("records"):
-                records_list.append({"name": to_text(record.get("name")), "id": to_text(record.get("id"))})
-        return {"success": True, "content": records_list} if len(records_list) > 1 or len(records_list) == 0 \
-            else lookup_single_secret(
-            records_list[0].get("id"))
-    else:
-        return {"success": False,
-                "status": response.status_code,
-                "text": response.text
-                }
-
-
-def lookup_single_secret(secret_id: int) -> dict:
-    url = f"{base_url}api/v2/secrets/{secret_id}"
-    response = requests.request("GET", url, headers=authenticated_headers, data={})
-    if response.status_code == 200:
-        json_data = json.loads(response.text)
-        content = {}
-        if "id" in json_data:
-            content["id"] = to_text(json_data.get('id'))
-            content["name"] = to_text(json_data.get("name"))
-            content["folder_id"] = to_text(json_data.get("folderId"))
-            for item in json_data.get("items"):
-                content[to_text(item.get("fieldName"))] = to_text(item.get("itemValue"))
-        return {"success": True, "content": content}
-    else:
-        return {"success": False,
-                "status": response.status_code,
-                "text": response.text
-                }
-
-
-def create_secret(
-        secret_name: str, user_name: str, password: str, folder_id: int, connection_string: str,
-        url: str, secret_type: str, notes: str, fqdn: str, logon_domain: str, database: str
-) -> dict:
+def get_secret_body(secret_name: str,
+                    secret_type: str,
+                    folder_id: int,
+                    logon_domain: str,
+                    fqdn: str,
+                    notes: str,
+                    password: str,
+                    user_name: str,
+                    database: str,
+                    connection_string: str,
+                    url: str
+                    ) -> dict:
     type_mapping = {"generic": {
         "template_id": 6010,
         "items": [
@@ -430,7 +399,7 @@ def create_secret(
     }
     }
 
-    payload = {
+    return {
         "name": secret_name,
         "secretTemplateId": type_mapping.get(secret_type).get("template_id"),
         "folderId": folder_id,
@@ -443,9 +412,67 @@ def create_secret(
         "sessionRecordingEnabled": False
     }
 
+
+def search_by_name(search_text: str) -> list | dict:
+    url = f"{base_url}api/v2/secrets?filter.searchText={search_text}"
+    response = requests.request("GET", url, headers=authenticated_headers, data={})
+    if response.status_code == 200:
+        json_data = json.loads(response.text)
+        records_list = []
+        if "records" in json_data:
+            for record in json_data.get("records"):
+                records_list.append({"name": to_text(record.get("name")), "id": to_text(record.get("id"))})
+        return {"success": True, "content": records_list} if len(records_list) > 1 or len(records_list) == 0 \
+            else lookup_single_secret(
+            records_list[0].get("id"))
+    else:
+        return {"success": False,
+                "status": response.status_code,
+                "text": response.text
+                }
+
+
+def get_full_secret(secret_id: int) -> requests.Response:
+    url = f"{base_url}api/v2/secrets/{secret_id}"
+    return requests.request("GET", url, headers=authenticated_headers, data={})
+
+
+def lookup_single_secret(secret_id: int) -> dict:
+    response = get_full_secret(secret_id)
+    if response.status_code == 200:
+        json_data = json.loads(response.text)
+        content = {}
+        if "id" in json_data:
+            content["id"] = to_text(json_data.get('id'))
+            content["name"] = to_text(json_data.get("name"))
+            content["folder_id"] = to_text(json_data.get("folderId"))
+            for item in json_data.get("items"):
+                content[to_text(item.get("fieldName"))] = to_text(item.get("itemValue"))
+        return {"success": True, "content": content}
+    else:
+        return {"success": False,
+                "status": response.status_code,
+                "text": response.text
+                }
+
+
+def create_secret(
+        secret_name: str, user_name: str, password: str, folder_id: int, connection_string: str,
+        url: str, secret_type: str, notes: str, fqdn: str, logon_domain: str, database: str
+) -> dict:
     response = requests.request(method="POST", url=f"{base_url}api/v1/secrets", headers={
         **authenticated_headers,
-        "Content-Type": "application/json"}, data=json.dumps(payload))
+        "Content-Type": "application/json"}, data=json.dumps(get_secret_body(secret_name=secret_name,
+                                                                             secret_type=secret_type,
+                                                                             folder_id=folder_id,
+                                                                             logon_domain=logon_domain,
+                                                                             fqdn=fqdn,
+                                                                             notes=notes,
+                                                                             password=password,
+                                                                             user_name=user_name,
+                                                                             database=database,
+                                                                             connection_string=connection_string,
+                                                                             url=url)))
 
     json_data = json.loads(response.text)
     if response.status_code == 200:
@@ -459,16 +486,66 @@ def create_secret(
 
 
 def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
-    url = f"{base_url}api/v1/secrets/{secret_id}/fields/password"
-    payload = json.dumps({
-        "password": updated_password,
-        "id": secret_id
-    })
-    response = requests.request("PUT", url, headers={
-        **authenticated_headers,
-        "Content-Type": "application/json"},
-                                data=payload)
-    return {"code": response.status_code, "text": response.text}
+    print("running update_secret_by_id")
+    full_secret_response = get_full_secret(secret_id)
+    print(f"got the full secret")
+    if full_secret_response.status_code == 200 and full_secret_response.json():
+        print(f"was able to parse the full secret, it is {full_secret_response.text}")
+        url = f"{base_url}secrets/{secret_id}"
+        print(f"url is {url}")
+        response = requests.put(url, json=full_secret_response.json(), headers={
+            **authenticated_headers,
+            "Content-Type": "application/json"})
+        print(f"have a response, it is {response.status_code}, text {response.text}")
+        if response.status_code == 200:
+            return {"success": True, "code": response.status_code, "text": response.text}
+        else:
+            return {"success": False, "code": response.status_code, "text": response.text}
+    else:
+        return {"success": False, "reason": "Could not get secret to be modified",
+                "code": full_secret_response.status_code, "text": full_secret_response.text}
+
+
+def update_secret_by_body(secret_name: str,
+                          user_name: str,
+                          password: str,
+                          folder_id: int,
+                          connection_string: str,
+                          url: str,
+                          secret_type: str,
+                          notes: str, fqdn: str,
+                          logon_domain: str,
+                          database: str,
+                          secret_id: int) -> dict:
+    print("running update_secret_by_body")
+    full_secret_response = get_full_secret(secret_id)
+    if full_secret_response.status_code == 200 and full_secret_response.json():
+        previous_secret = full_secret_response.json()
+        previous_secret["items"] = get_secret_body(secret_name=secret_name,
+                                                   secret_type=secret_type,
+                                                   folder_id=folder_id,
+                                                   logon_domain=logon_domain,
+                                                   fqdn=fqdn,
+                                                   notes=notes,
+                                                   password=password,
+                                                   user_name=user_name,
+                                                   database=database,
+                                                   connection_string=connection_string,
+                                                   url=url).get("items")
+        request_url = f"{base_url}api/v1/secrets/{secret_id}"
+        print(f"url is {request_url}")
+        response = requests.put(request_url, json=previous_secret,
+                                headers={
+                                    **authenticated_headers,
+                                    "Content-Type": "application/json"})
+        print(f"have a response, it is {response.status_code}")
+        if response.status_code == 200:
+            return {"success": True, "code": response.status_code, "data": {"secret_id": response.json().get("id")}}
+        else:
+            return {"success": False, "code": response.status_code, "data": response.text}
+    else:
+        return {"success": False, "reason": "Could not get secret to be modified",
+                "code": full_secret_response.status_code, "data": full_secret_response.text}
 
 
 def update_secret(secret_name: str,
@@ -491,16 +568,38 @@ def update_secret(secret_name: str,
         )
     else:
         search_result = search_by_name(secret_name)
-        print(f"search_result is {search_result}")
-        if search_result.get('success') and len(search_result.get('content')):
-            if(len(search_result.get('content'))) == 1:
-                current_secret = search_result.get('content')[0]
-                if current_secret.get("Username") == user_name and current_secret.get("folder_id") == folder_id:
-                    update_secret_by_id(
-                        secret_id=current_secret["id"],
-                        updated_password=password
-                    )
+        # print(f"search_result is {search_result}")
+        if search_result.get('success'):
+            if isinstance(search_result.get('content'), dict):
+                # print("we have success and a dict")
+                current_secret = search_result.get('content')
+                # print(f'current user name is {current_secret.get("Username")}, looking for {user_name}, they are equal {current_secret.get("Username") == user_name}')
+                # print(f'current folder {current_secret.get("folder_id")}, looking for {folder_id}, they are equal {int(current_secret.get("folder_id")) == folder_id}')
+                if current_secret.get("Username") == user_name and int(current_secret.get("folder_id")) == folder_id:
+                    # print("must update secret")
+                    return update_secret_by_body(secret_name=secret_name,
+                                                 user_name=user_name,
+                                                 password=password,
+                                                 folder_id=folder_id,
+                                                 connection_string=connection_string,
+                                                 url=url,
+                                                 secret_type=secret_type,
+                                                 notes=notes,
+                                                 fqdn=fqdn,
+                                                 logon_domain=logon_domain,
+                                                 database=database,
+                                                 secret_id=int(current_secret["id"]))
                 else:
+                    return {"success": False,
+                            "reason": "We found a secret by that name, but not in the folder you specified. "
+                                      f"Aborting to avoid overwriting the wrong secret. "
+                                      f"was {current_secret.get('folder_id')}, you specified {folder_id}, "
+                                      f"username was {current_secret.get('Username')}, you specified {user_name}",
+                            "search_result": search_result}
+            elif isinstance(search_result.get('content'), list):
+                print("we have a list")
+                print(f"its len is {len(search_result.get('content'))}")
+                if len(search_result.get('content')) == 0:
                     return create_secret(secret_name=secret_name,
                                          user_name=user_name,
                                          password=password,
@@ -513,21 +612,10 @@ def update_secret(secret_name: str,
                                          logon_domain=logon_domain,
                                          database=database
                                          )
-        elif len(search_result.get('content')) == 0:
-            return create_secret(secret_name=secret_name,
-                                 user_name=user_name,
-                                 password=password,
-                                 folder_id=folder_id,
-                                 connection_string=connection_string,
-                                 url=url,
-                                 secret_type=secret_type,
-                                 notes=notes,
-                                 fqdn=fqdn,
-                                 logon_domain=logon_domain,
-                                 database=database
-                                 )
+                else:
+                    return {"success": False, "reason": "Secret name not unique", "search_result": search_result}
         else:
-            return {"changed": False, "reason": "Secret name not unique", "search_result": search_result}
+            return {"success": False, "reason": "Could not lookup if secret exists", "search_result": search_result}
 
 
 def main():
@@ -677,6 +765,7 @@ def main():
                                 secret_id=int(module.params.get("secret_id", -1)
                                               if module.params.get("secret_id", -1) is not None else -1)
                                 )
+            print(f"res is {res}")
             if not res.get("success"):
                 module.fail_json(msg=f"error upserting secret {res}", **result)
 
