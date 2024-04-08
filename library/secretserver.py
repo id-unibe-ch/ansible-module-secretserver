@@ -15,66 +15,377 @@ from ansible.module_utils.basic import AnsibleModule
 
 DOCUMENTATION = r'''
 ---
-module: my_test
+module: secretserver
 
-short_description: This is my test module
+short_description: Reads and writes to a Thycotic Secret Server instance
 
-# If this is part of a collection, you need to use semantic versioning,
-# i.e. the version is of the form "2.5.0" and not "2.4".
 version_added: "1.0.0"
 
-description: This is my longer description explaining my test module.
+description: This module allows you to interact with an Instance of a Thycotic (formerly Delinea) Secret Server
+    To execute this module, the host it is running on must be cleared to access the Secret Server by both the Firewall
+    and the ACL. This is why you see `delegate_to` used extensively in the examples.
+    You can test if your system can reach the Secret Server by doing 
+    `curl -X POST "https://secretserver.example.com/SecretServer/oauth2/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -H "Accept: */*" \
+    --data-urlencode "grant_type=password" \
+    --data-urlencode "username=$USERNAME" \
+    --data-urlencode "password=$PASSWORD`
 
 options:
-    name:
-        description: This is the message to send to the test module.
+    secretserver_password:
+        description: The Password you use to authenticate to the Secret Server. 
+            You must specify either the secretserver_token or the secretserver_password. 
+            If both are specified, the token takes precedence.
+        required: false
+        type: str
+    secretserver_token:
+        description: The Token you use to authenticate to the Secret Server. 
+            You must specify either the secretserver_token or the secretserver_password. 
+            If both are specified, the token takes precedence.
+            You can get a Token by going to the Web UI, 
+            clicking the badge on the top right and navigating to "User Preferences".
+            At the bottom of the page, you have the option to "Generate API Token and Copy to Clipboard"
+        required: false
+        type: str
+    secretserver_username: 
+        description: The Username you use to authenticate to the Secret Server.
         required: true
         type: str
-    new:
-        description:
-            - Control to demo if the result of this module is changed or not.
-            - Parameter description can be a list as well.
+    secretserver_base_url: 
+        description: The Base URL of your Secret Server Instance
+            If your Web UI is at `https://secretserver.example.com/SecretServer/app/#/secrets/view/all`,
+            your Base URL is `https://secretserver.example.com/`.
+        required: true
+        type: str
+    action: 
+        description: The Action you want to take on the secret Server.
+            Must be one of "search", "get", "upsert", "update".
+            "search" performs a text search over all the secret names your user has access to.
+            "get" looks up a single secret by its ID.
+            "upsert" will look for the secret_name and folder_id you specify. 
+            If no secret exists that match those two criteria, a new secret will be created.
+            If a secret already exists that matches both criteria, 
+            the secret will be updated with the values you provided.
+            If more than one secret matches both criteria, no secret will be changed.
+            You cannot change the secret type or its name with this method.
+            Any other fields you set will be overwritten with that value.
+            If you do not specify a field that was previously set, it will not be overwritten.
+            If you want to explicitly clear a field of any values, specify it to `set_to_none`.
+            "update" updates the password of an existing secret
+            "get" and "search" will run in check mode, 
+            "upsert" and "update" will return after doing the input validation 
+        required: true
+        type: str
+    search_text: 
+        description: The text you want to look for. Required for the "search" action
         required: false
-        type: bool
+        type: str
+    secret_id: 
+        description: The ID of the Secret you want to target.
+            You can get the ID of a Secret by looking at it in the Web UI.
+            If the URL uf the Secret is `https://secretserver.example.com/SecretServer/app/#/secret/1234/general`,
+            its ID is 1324.
+            Required for the "get" and "update" actions. 
+        required: false
+        type: int
+    folder_id: 
+        description: The ID of the folder you want to target.
+            You can get the ID of a folder by looking at it in the Web UI.
+            If the URL uf the folder is `https://secretserver.example.com/SecretServer/app/#/secrets/view/folder/9876`,
+            its ID is 9876.
+            Required for the "upsert" action.
+        required: false
+        type: int
+    type: 
+        description: The type of secret you want to create.
+            Different types have different fields, some of which are required fields.
+            The types and their required fields are:
+            "server": 
+                - "secret_name"
+                - "user_name"
+                - "password"
+            "database": 
+                - "secret_name"
+                - "database"
+                - "user_name"
+                - "password"
+            "website":
+                - "secret_name"
+                - "url"
+                - "user_name"
+                - "password"
+            "generic":
+                - "secret_name"
+                - "user_name"
+                - "password"
+        required: false
+        type: str
+    secret_name: 
+        description: The name of the secret you want to create or update.
+            Required for the "upsert" action with all secret types.
+        required: false
+        type: str
+    user_name: 
+        description: The value for the "Username" field of the Secret.
+            Required for the "upsert" action with all secret types.
+        required: false
+        type: str
+    password: 
+        description: The value for the "Password" field.
+            Required for the "upsert" action with all secret types.
+            Required for the "update" action.
+        required: false
+        type: str
+    database: 
+        description: The value for the "Database" field.
+            Required for the "upsert" action with the "database" secret type.
+        required: false
+        type: str
+    connection_string: 
+        description: The value for the "Connection string" field.
+            Optional for the "upsert" action with the "database" secret type.
+        required: false
+        type: str
+    url: 
+        description: The value for the "URL" field.
+            Required for the "upsert" action with the "website" secret type.
+        required: false
+        type: str
+    fqdn: 
+        description: The value for the "FQDN" field.
+            Optional for the "upsert" action with the "server" secret type.
+        required: false
+        type: str
+    logon_domain: 
+        description: The value for the "Logon Domain" field.
+            Optional for the "upsert" action with the "server" secret type.
+        required: false
+        type: str
+    notes: 
+        description:The value for the "Notes" field.
+            Optional for the "upsert" action with any secret type.
+        required: false
+        type: str
+    
+        
 # Specify this value according to your collection
 # in format of namespace.collection.doc_fragment_name
-# extends_documentation_fragment:
-#     - my_namespace.my_collection.my_doc_fragment_name
+extends_documentation_fragment:
+    - id-unibe-ch.sys.secretserver
 
 author:
-    - Your Name (@yourGitHubHandle)
+    - Matthias Studer (@studerma)
 '''
 
 EXAMPLES = r'''
-# Pass in a message
-- name: Test with a message
-  my_namespace.my_collection.my_test:
-    name: hello world
+- name: some acrobatics with the secret server
+  hosts: your_hosts
+  pre_tasks:
+    - name: Load Variables from the Vault
+      ansible.builtin.include_vars: "vault.yml"
+      run_once: true
+    - name: Set variables for the secretserver module
+      ansible.builtin.set_fact:
+        secretserver_base_url: "https://secretserver.example.com/SecretServer/"
+  tasks:
+    - name: Get a single Secret by its ID
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: get
+        secret_id: 12345
+      register: get_secret
+      delegate_to: localhost
 
-# pass in a message and have changed true
-- name: Test with a message and changed output
-  my_namespace.my_collection.my_test:
-    name: hello world
-    new: true
+    - name: dump the secret we got
+      debug:
+        var: get_secret
 
-# fail the module
-- name: Test failure of the module
-  my_namespace.my_collection.my_test:
-    name: fail me
+    - name: Search trough all the secret names
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: search
+        search_text: "login"
+      register: search_secret
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: search_secret
+
+    - name: If you narrow down your search enough, so only one secretname matches your search, you get the whle secret details
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: search
+        search_text: "a really specific secret name"
+      register: unique_search_secret
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: unique_search_secret
+
+    - name: Read a .env file to demonstrate the usage of a token
+      ansible.builtin.slurp:
+        src: ../.env
+      register: env_file_content
+      delegate_to: localhost
+
+    - name: Parse the .env file contents
+      ansible.builtin.set_fact:
+        env_vars: "{{ ('{' + (env_file_content.content | b64decode).split('\n') | select | map('regex_replace', '([^=]*)=(.*)', '\"\\1\": \"\\2\"') | join(',') + '}') | from_json }}"
+
+    - name: make a search with a personal access token
+      secretserver:
+        secertserver_token: "{{ env_vars['SECRET_SERVER_TOKEN'] }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: get
+        secret_id: 12345
+      register: get_secret
+      delegate_to: localhost
+
+    - name: dump the secret we got
+      debug:
+        var: get_secret
+
+    - name: Create a generic account
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: upsert
+        type: "generic"
+        folder_id: 999
+        secret_name: "{{ 'lookup_module_test_generic' + 9999999 | random | string }}"
+        user_name: "root"
+        password: "{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=12') }}"
+        notes:
+          key1: value1
+          key2: value2
+      register: generic_account
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: generic_account
+
+    - name: Create a website login
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: upsert
+        type: "website"
+        folder_id: 999
+        secret_name: "{{ 'lookup_module_test_website' + 9999999 | random | string }}"
+        user_name: "root"
+        password: "{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=12') }}"
+        url: "https://www.example.com"
+      register: website_login
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+       var: website_login
+
+
+    - name: Create a database account
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: upsert
+        type: "database"
+        folder_id: 999
+        secret_name: "{{ 'lookup_module_test_database' + 9999999 | random | string }}"
+        user_name: "root"
+        password: "{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=12') }}"
+        database: "jdbc:www.hostedpostgres.com:5432/mydb"
+      register: database_account
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: database_account
+
+    - name: Create a server account
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: upsert
+        type: "server"
+        folder_id: 999
+        secret_name: "{{ 'lookup_module_test_server' + 9999999 | random | string }}"
+        user_name: "root"
+        password: "{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=12') }}"
+        database: "jdbc:www.hostedpostgres.com:5432/mydb"
+      register: server_account
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: server_account
+
+    - name: Change the username and password of a Secret by searching for the secret
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: upsert
+        type: "generic"
+        folder_id: 999
+        secret_name: "your secret name"
+        user_name: "hello"
+        password: "world_{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=4') }}"
+      register: password_change_with_search
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: password_change_with_search
+
+    - name: Change the password of a Secret by secret id
+      secretserver:
+        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: update
+        secret_id: 12345
+        password: "{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=20') }}"
+      register: password_change_by_id
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: password_change_by_id
 '''
 
 RETURN = r'''
-# These are examples of possible return values, and in general should use other names for return values.
-original_message:
-    description: The original name param that was passed in.
-    type: str
-    returned: always
-    sample: 'hello world'
+data:
+    description: The id of the secret that was targeted
+    type: dict
+    returned: by the "upsert" and "update" actions
+    sample: "data": {"secret_id": 12345 }
 message:
-    description: The output message that the test module generates.
-    type: str
-    returned: always
-    sample: 'goodbye'
+    content: The result of your search/lookup
+    type: dict
+    returned: by the "get" and "search" actions
+    sample: "content": {
+            "Notes": "Why did the functional programmer get thrown out of school? Because he refused to take classes.",
+            "Password": "supersecretpassword",
+            "Username": "my_user_name",
+            "folder_id": "999",
+            "id": "12345",
+            "name": "Your secret's name"
+        }
 '''
 base_url = None
 authenticated_headers = None
@@ -651,8 +962,7 @@ def main():
         url=dict(type='str', required=False),
         fqdn=dict(type='str', required=False),
         logon_domain=dict(type='str', required=False),
-        notes=dict(type='str', required=False),
-        new=dict(type='bool', required=False, default=False)
+        notes=dict(type='str', required=False)
     )
 
     # seed the result dict in the object
