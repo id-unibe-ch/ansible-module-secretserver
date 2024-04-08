@@ -140,7 +140,7 @@ curl -X POST "https://secretserver.example.com/SecretServer/oauth2/token" \
 | password                                              | required  | required  | required | required   |
 | database                                              | ignored   | ignored   | ignored  | required   |
 | connection_string                                     | ignored   | ignored   | ignored  | optional   |
-| url                                                   | ignored   | optional  | ignored  | ignored    |
+| url                                                   | ignored   | required  | ignored  | ignored    |
 | fqdn                                                  | ignored   | ignored   | optional | ignored    |
 | logon_domain                                          | ignored   | ignored   | optional | ignored    |
 | notes                                                 | optional  | optional  | optional | optional   |
