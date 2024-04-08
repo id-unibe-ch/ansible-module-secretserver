@@ -520,25 +520,42 @@ def update_secret_by_body(secret_name: str,
     print("running update_secret_by_body")
     full_secret_response = get_full_secret(secret_id)
     if full_secret_response.status_code == 200 and full_secret_response.json():
+        # If the user has not provided a field, it would get overwritten with "none"
+        # We don't want that, so we need to check each field if the user set it to the special value "set_to_none"
+        # if they have done that, we set the field to "None"
+        # otherwise we keep the previous value
         previous_secret = full_secret_response.json()
-        previous_secret["items"] = get_secret_body(secret_name=secret_name,
-                                                   secret_type=secret_type,
-                                                   folder_id=folder_id,
-                                                   logon_domain=logon_domain,
-                                                   fqdn=fqdn,
-                                                   notes=notes,
-                                                   password=password,
-                                                   user_name=user_name,
-                                                   database=database,
-                                                   connection_string=connection_string,
-                                                   url=url).get("items")
+        updated_items = get_secret_body(secret_name=secret_name,
+                                        secret_type=secret_type,
+                                        folder_id=folder_id,
+                                        logon_domain=logon_domain,
+                                        fqdn=fqdn,
+                                        notes=notes,
+                                        password=password,
+                                        user_name=user_name,
+                                        database=database,
+                                        connection_string=connection_string,
+                                        url=url).get("items")
+        merged_items = []
+        for previous_item in previous_secret.get("items"):
+            updated_item = next(item for item in updated_items
+                                if item.get("fieldName") == previous_item.get("fieldName"))
+            if updated_item.get("itemValue") is None:
+                merged_items.append(previous_item)
+            elif updated_item.get("itemValue") == "set_to_none":
+                none_item = previous_item
+                none_item["itemValue"] = None
+                merged_items.append(none_item)
+            else:
+                new_item = previous_item
+                new_item["itemValue"] = updated_item.get("itemValue")
+                merged_items.append(new_item)
+        previous_secret["items"] = merged_items
         request_url = f"{base_url}api/v1/secrets/{secret_id}"
-        print(f"url is {request_url}")
         response = requests.put(request_url, json=previous_secret,
                                 headers={
                                     **authenticated_headers,
                                     "Content-Type": "application/json"})
-        print(f"have a response, it is {response.status_code}")
         if response.status_code == 200:
             return {"success": True, "code": response.status_code, "data": {"secret_id": response.json().get("id")}}
         else:
