@@ -184,6 +184,10 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
     - name: dump the secret we got
       debug:
         var: get_secret
+        
+    - name: access a field from a python dict we stored in the notes field
+      debug:
+        msg: "{{ (get_secret['content']['Notes'] | from_yaml)['key1'] }}"
 
     - name: Search trough all the secret names
       secretserver:
