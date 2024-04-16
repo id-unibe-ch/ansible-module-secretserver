@@ -90,6 +90,8 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
       - "secret_name"
       - "user_name"
       - "password"
+    - "keypair"
+      - "secret_name"
   - **Required**: `false`
   - **Type**: `str`
 
@@ -99,7 +101,7 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
   - **Type**: `str`
 
 - `user_name`:
-  - **Description**: The value for the "Username" field of the Secret. Required for the "upsert" action with all secret types.
+  - **Description**: The value for the "Username" field of the Secret. Required for the "upsert" action with all secret types except for "keypair".
   - **Required**: `false`
   - **Type**: `str`
 
@@ -138,25 +140,49 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
   - **Required**: `false`
   - **Type**: `str`
 
+- `host`:
+  - **Description**: The value for the "Host" field. Optional for the "upsert" action with the "keypair" secret type.
+  - **Required**: `false`
+  - **Type**: `str`
+
+- `location`:
+  - **Description**: The value for the "location" field. Optional for the "upsert" action with the "keypair" secret type.
+  - **Required**: `false`
+  - **Type**: `str`
+
+- `private_key`:
+  - **Description**: The value for the "Private key" field. Optional for the "upsert" action with the "keypair" secret type.
+  - **Required**: `false`
+  - **Type**: `str`
+
+- `public_key`:
+  - **Description**: The value for the "Public key" field. Optional for the "upsert" action with the "keypair" secret type.
+  - **Required**: `false`
+  - **Type**: `str`
+
 ### Full overview of all the parameters for the "upsert" action and with which type they can/must be used
 
-| parameter name                                        | `generic` | `website` | `server` | `database` |
-|-------------------------------------------------------|-----------|-----------|----------|------------|
-| either secretserver_password \n or secretserver_token | required  | required  | required | required   |
-| secretserver_username                                 | required  | required  | required | required   |
-| secretserver_base_url                                 | required  | required  | required | required   |
-| action                                                | required  | required  | required | required   |
-| folder_id                                             | required  | required  | required | required   |
-| type                                                  | required  | required  | required | required   |
-| secret_name                                           | required  | required  | required | required   |
-| user_name                                             | required  | required  | required | required   |
-| password                                              | required  | required  | required | required   |
-| database                                              | ignored   | ignored   | ignored  | required   |
-| connection_string                                     | ignored   | ignored   | ignored  | optional   |
-| url                                                   | ignored   | required  | ignored  | ignored    |
-| fqdn                                                  | ignored   | ignored   | optional | ignored    |
-| logon_domain                                          | ignored   | ignored   | optional | ignored    |
-| notes                                                 | optional  | optional  | optional | optional   |
+| parameter name                                          | `generic` | `website` | `server` | `database` | `keypair` |
+|---------------------------------------------------------|-----------|-----------|----------|------------|-----------|
+| either secretserver_password <br> or secretserver_token | required  | required  | required | required   | required  |
+| secretserver_username                                   | required  | required  | required | required   | required  |
+| secretserver_base_url                                   | required  | required  | required | required   | required  |
+| action                                                  | required  | required  | required | required   | required  |
+| folder_id                                               | required  | required  | required | required   | required  |
+| type                                                    | required  | required  | required | required   | required  |
+| secret_name                                             | required  | required  | required | required   | required  |
+| user_name                                               | required  | required  | required | required   | ignored   |
+| password                                                | required  | required  | required | required   | optional  |
+| database                                                | ignored   | ignored   | ignored  | required   | ignored   |
+| connection_string                                       | ignored   | ignored   | ignored  | optional   | ignored   |
+| url                                                     | ignored   | required  | ignored  | ignored    | ignored   |
+| fqdn                                                    | ignored   | ignored   | optional | ignored    | ignored   |
+| logon_domain                                            | ignored   | ignored   | optional | ignored    | ignored   |
+| notes                                                   | optional  | optional  | optional | optional   | optional  |
+| host                                                    | ignored   | ignored   | ignored  | ignored    | optional  |
+| location                                                | ignored   | ignored   | ignored  | ignored    | optional  |  
+| private_key                                             | ignored   | ignored   | ignored  | ignored    | optional  | 
+| public_key                                              | ignored   | ignored   | ignored  | ignored    | optional  |
 
 ## Examples
 
@@ -319,6 +345,25 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
     - name: dump the secret result
       debug:
         var: server_account
+
+    - name: Create a public-private keypair
+      secretserver:
+        secretserver_password: "{{ ss_password }}"
+        secretserver_username: "{{ ss_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: upsert
+        type: "keypair"
+        folder_id: 999
+        secret_name: "{{ 'lookup_module_test_keypair' + 9999999 | random | string }}"
+        password: "{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=12') }}"
+        public_key: '---- BEGIN SSH2 PUBLIC KEY ---- Comment: "eddsa-key-20240412" AAAAC3NzaC1lZDI1NTE5AAAAINkuJsgZr0ioDahf5mVKUYvL9KaUKYTBg429H1ds VUqH ---- END SSH2 PUBLIC KEY ----'
+        private_key: "-----BEGIN OPENSSH PRIVATE KEY----- b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz -----END OPENSSH PRIVATE KEY-----"
+      register: keypair
+      delegate_to: localhost
+
+    - name: dump the secret result
+      debug:
+        var: keypair
 
     - name: Change the username and password of a Secret by searching for the secret
       secretserver:

@@ -133,7 +133,7 @@ options:
         type: str
     password: 
         description: The value for the "Password" field.
-            Required for the "upsert" action with all secret types.
+            Required for the "upsert" action with all secret types except for "keypair".
             Required for the "update" action.
         required: false
         type: str
@@ -165,6 +165,26 @@ options:
     notes: 
         description:The value for the "Notes" field.
             Optional for the "upsert" action with any secret type.
+        required: false
+        type: str
+    host: 
+        description:The value for the "Host" field.
+            Optional for the "upsert" action with the "keypair" secret type.
+        required: false
+        type: str
+    location: 
+        description:The value for the "Location" field.
+            Optional for the "upsert" action with the "keypair" secret type.
+        required: false
+        type: str
+    private_key: 
+        description:The value for the "Private key" field.
+            Optional for the "upsert" action with the "keypair" secret type.
+        required: false
+        type: str
+    public_key: 
+        description:The value for the "Public key" field.
+            Optional for the "upsert" action with the "keypair" secret type.
         required: false
         type: str
     
@@ -459,7 +479,11 @@ def get_secret_body(secret_name: str,
                     user_name: str,
                     database: str,
                     connection_string: str,
-                    url: str
+                    url: str,
+                    host: str,
+                    location: str,
+                    private_key: str,
+                    public_key: str
                     ) -> dict:
     type_mapping = {"generic": {
         "template_id": 6010,
@@ -707,6 +731,89 @@ def get_secret_body(secret_name: str,
             }
         ]
 
+    }, "keypair": {
+        "template_id": 6027,
+        "items": [
+            {
+                "fieldDescription": "Where the key is used (FQDN)",
+                "fieldId": 190,
+                "fieldName": "Host",
+                "isFile": False,
+                "isList": False,
+                "isNotes": False,
+                "isPassword": False,
+                "itemValue": host,
+                "slug": "host"
+            },
+            {
+                "fieldDescription": "Where the key is stored",
+                "fieldId": 236,
+                "fieldName": "Location",
+                "isFile": False,
+                "isList": False,
+                "isNotes": False,
+                "isPassword": True,
+                "itemValue": location,
+                "slug": "location"
+            },
+            {
+                "fieldDescription": "As text",
+                "fieldId": 194,
+                "fieldName": "Private key",
+                "fileAttachmentId": 0,
+                "filename": "",
+                "isFile": False,
+                "isList": False,
+                "isNotes": False,
+                "isPassword": False,
+                "itemValue": private_key,
+                "listType": "None",
+                "slug": "private-key-1"
+            },
+            {
+                "fieldDescription": "Password for private key",
+                "fieldId": 237,
+                "fieldName": "Password",
+                "fileAttachmentId": 0,
+                "filename": "",
+                "isFile": False,
+                "isList": False,
+                "isNotes": False,
+                "isPassword": True,
+                "itemValue": password,
+                "listType": "None",
+                "slug": "password"
+            },
+            {
+                "fieldDescription": "As text",
+                "fieldId": 193,
+                "fieldName": "Public key",
+                "fileAttachmentId": 0,
+                "filename": "",
+                "isFile": False,
+                "isList": False,
+                "isNotes": False,
+                "isPassword": False,
+                "itemValue": public_key,
+                "listType": "None",
+                "slug": "private-key-1"
+            },
+            {
+                "fieldDescription": "",
+                "fieldId": 195,
+                "fieldName": "Notes",
+                "fileAttachmentId": 0,
+                "filename": "",
+                "isFile": False,
+                "isList": False,
+                "isNotes": True,
+                "isPassword": False,
+                "itemValue": notes,
+                "listType": "None",
+                "slug": "notes"
+            }
+        ]
+
     }
     }
 
@@ -768,8 +875,21 @@ def lookup_single_secret(secret_id: int) -> dict:
 
 
 def create_secret(
-        secret_name: str, user_name: str, password: str, folder_id: int, connection_string: str,
-        url: str, secret_type: str, notes: str, fqdn: str, logon_domain: str, database: str
+        secret_name: str,
+        user_name: str,
+        password: str,
+        folder_id: int,
+        connection_string: str,
+        url: str,
+        secret_type: str,
+        notes: str,
+        fqdn: str,
+        logon_domain: str,
+        database: str,
+        host: str,
+        location: str,
+        private_key: str,
+        public_key: str
 ) -> dict:
     response = requests.request(method="POST", url=f"{base_url}api/v1/secrets", headers={
         **authenticated_headers,
@@ -783,7 +903,11 @@ def create_secret(
                                                                              user_name=user_name,
                                                                              database=database,
                                                                              connection_string=connection_string,
-                                                                             url=url)))
+                                                                             url=url,
+                                                                             host=host,
+                                                                             location=location,
+                                                                             private_key=private_key,
+                                                                             public_key=public_key)))
 
     json_data = json.loads(response.text)
     if response.status_code == 200:
@@ -829,7 +953,11 @@ def update_secret_by_body(secret_name: str,
                           notes: str, fqdn: str,
                           logon_domain: str,
                           database: str,
-                          secret_id: int) -> dict:
+                          secret_id: int,
+                          host: str,
+                          location: str,
+                          private_key: str,
+                          public_key: str) -> dict:
     print("running update_secret_by_body")
     full_secret_response = get_full_secret(secret_id)
     if full_secret_response.status_code == 200 and full_secret_response.json():
@@ -848,7 +976,11 @@ def update_secret_by_body(secret_name: str,
                                         user_name=user_name,
                                         database=database,
                                         connection_string=connection_string,
-                                        url=url).get("items")
+                                        url=url,
+                                        host=host,
+                                        location=location,
+                                        private_key=private_key,
+                                        public_key=public_key).get("items")
         merged_items = []
         for previous_item in previous_secret.get("items"):
             updated_item = next(item for item in updated_items
@@ -888,7 +1020,11 @@ def update_secret(secret_name: str,
                   secret_type: str,
                   notes: str,
                   fqdn: str,
-                  logon_domain: str
+                  logon_domain: str,
+                  host: str,
+                  location: str,
+                  private_key: str,
+                  public_key: str
                   ) -> dict:
     search_result = search_by_name(secret_name)
     # print(f"search_result is {search_result}")
@@ -911,7 +1047,11 @@ def update_secret(secret_name: str,
                                              fqdn=fqdn,
                                              logon_domain=logon_domain,
                                              database=database,
-                                             secret_id=int(current_secret["id"]))
+                                             secret_id=int(current_secret["id"]),
+                                             host=host,
+                                             location=location,
+                                             private_key=private_key,
+                                             public_key=public_key)
             else:
                 return {"success": False,
                         "reason": "We found a secret by that name, but not in the folder you specified. "
@@ -933,7 +1073,11 @@ def update_secret(secret_name: str,
                                      notes=notes,
                                      fqdn=fqdn,
                                      logon_domain=logon_domain,
-                                     database=database
+                                     database=database,
+                                     host=host,
+                                     location=location,
+                                     private_key=private_key,
+                                     public_key=public_key
                                      )
             else:
                 return {"success": False, "reason": "Secret name not unique", "search_result": search_result}
@@ -962,7 +1106,12 @@ def main():
         url=dict(type='str', required=False),
         fqdn=dict(type='str', required=False),
         logon_domain=dict(type='str', required=False),
-        notes=dict(type='str', required=False)
+        notes=dict(type='str', required=False),
+        host=dict(type='str', required=False),
+        location=dict(type='str', required=False),
+        private_key=dict(type='str', required=False, no_log=True),
+        public_key=dict(type='str', required=False)
+
     )
 
     # seed the result dict in the object
@@ -1002,7 +1151,7 @@ def main():
             module.fail_json(msg="You must specify a search_text to use the search function", **result)
 
     elif action == "upsert":
-        for key in ["secret_name", "user_name", "password", "folder_id", "type"]:
+        for key in ["secret_name", "password", "folder_id", "type"]:
             if module.params.get(key) is None:
                 module.fail_json(msg=f"You must specify a {key} to use the upsert function", **result)
         if not int(module.params.get("folder_id")):
@@ -1012,10 +1161,12 @@ def main():
 
         if module.params.get("secret_type"):
             secret_type = module.params.get("secret_type")
+            # Establishing what types we can handle and what their required fields are
             acceptable_types = {"server": ["secret_name", "user_name", "password"],
                                 "database": ["secret_name", "database", "user_name", "password"],
                                 "website": ["secret_name", "url", "user_name", "password"],
-                                "generic": ["secret_name", "user_name", "password"]
+                                "generic": ["secret_name", "user_name", "password"],
+                                "keypair": ["secret_name"]
                                 }
             if secret_type not in acceptable_types.keys:
                 module.fail_json(msg=f"the secret type must be one of {', '.join(acceptable_types)}", **result)
@@ -1094,7 +1245,11 @@ def main():
                                 secret_type=module.params.get("type"),
                                 notes=module.params.get("notes"),
                                 fqdn=module.params.get("fqdn"),
-                                logon_domain=module.params.get("logon_domain")
+                                logon_domain=module.params.get("logon_domain"),
+                                host=module.params.get("host"),
+                                location=module.params.get("location"),
+                                private_key=module.params.get("private_key"),
+                                public_key=module.params.get("public_key")
                                 )
             print(f"res is {res}")
             if not res.get("success"):
