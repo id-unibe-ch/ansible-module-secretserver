@@ -960,8 +960,10 @@ def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
     if full_secret_response.status_code == 200 and full_secret_response.json():
         previous_secret = full_secret_response.json()
         previous_items = previous_secret.get("items")
+        previous_password = ""
         for item in previous_items:
             if item.get("slug") == "password":
+                previous_password = item.get("itemValue")
                 item["itemValue"] = updated_password
                 break
         previous_secret["items"] = previous_items
@@ -970,7 +972,12 @@ def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
             **authenticated_headers,
             "Content-Type": "application/json"})
         if response.status_code == 200:
-            return {"success": True, "code": response.status_code, "text": {"secret_id": response.json().get("id")}}
+            return {
+                "success": True,
+                "code": response.status_code,
+                "text": {"secret_id": response.json().get("id")},
+                "changed": previous_password != updated_password
+                }
         else:
             return {"success": False, "code": response.status_code, "text": response.text}
     else:
@@ -1310,7 +1317,7 @@ def main():
 
             else:
                 result["data"] = res.get("text")
-                result["changed"] = True
+                result["changed"] = res.get("changed")
                 module.exit_json(**result)
 
 
