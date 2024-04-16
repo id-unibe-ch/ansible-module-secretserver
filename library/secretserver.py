@@ -856,6 +856,40 @@ def get_full_secret(secret_id: int) -> requests.Response:
 
 
 def lookup_single_secret(secret_id: int) -> dict:
+    type_mapping = {
+        6027: "keypair",
+        6010: "generic",
+        9: "website",
+        6008: "database",
+        6026: "server",
+        9041: "iam_console",
+        8046: "iam_key",
+        1: "credit_card",
+        9044: "vault_client",
+        10053: "escapeless_password",
+        6013: "firewall",
+        9045: "google_iam",
+        8047: "ibm_mainframe",
+        6033: "id_admin",
+        10050: "oracle_tcps",
+        10051: "oracle_ver2",
+        10052: "oracle_walletless",
+        2: "password",
+        3: "pin",
+        14: "license_key",
+        9047: "sap",
+        6028: "note",
+        6032: "service",
+        6011: "snmp",
+        8045: "ssh_keyless_privileged",
+        7038: "ssh_privileged",
+        8044: "ssh_keyless",
+        7037: "ssh",
+        7041: "watchguard",
+        6029: "windows_server",
+        6034: "x509",
+        7039: "zos_mainframe"
+    }
     response = get_full_secret(secret_id)
     if response.status_code == 200:
         json_data = json.loads(response.text)
@@ -864,6 +898,7 @@ def lookup_single_secret(secret_id: int) -> dict:
             content["id"] = to_text(json_data.get('id'))
             content["name"] = to_text(json_data.get("name"))
             content["folder_id"] = to_text(json_data.get("folderId"))
+            content["type"] = type_mapping.get(json_data.get("secretTemplateId"))
             for item in json_data.get("items"):
                 content[to_text(item.get("fieldName"))] = to_text(item.get("itemValue"))
         return {"success": True, "content": content}
