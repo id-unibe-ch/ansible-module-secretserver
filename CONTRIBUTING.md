@@ -13,3 +13,9 @@ That means:
 6. Add a nice example in `README.md`
 7. Test your code
 8. Done
+
+## HOW DO I DEBUG DURING THE DEV PROCESS?
+
+Ansible makes it _really_ hard to get good insight into a module.
+The most reliable way is to log to stdout and make your function not return anything.
+At this point, Ansible will throw an error and dump the module's stdout.
