@@ -394,8 +394,8 @@ data:
     type: dict
     returned: by the "upsert" and "update" actions
     sample: "data": {"secret_id": 12345 }
-message:
-    content: The result of your search/lookup
+content:
+    description: The result of your search/lookup
     type: dict
     returned: by the "get" and "search" actions
     sample: "content": {
@@ -960,8 +960,10 @@ def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
     if full_secret_response.status_code == 200 and full_secret_response.json():
         previous_secret = full_secret_response.json()
         previous_items = previous_secret.get("items")
+        previous_password = ""
         for item in previous_items:
             if item.get("slug") == "password":
+                previous_password = item.get("itemValue")
                 item["itemValue"] = updated_password
                 break
         previous_secret["items"] = previous_items
@@ -970,12 +972,37 @@ def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
             **authenticated_headers,
             "Content-Type": "application/json"})
         if response.status_code == 200:
-            return {"success": True, "code": response.status_code, "text": {"secret_id": response.json().get("id")}}
+            return {
+                "success": True,
+                "code": response.status_code,
+                "text": {"secret_id": response.json().get("id")},
+                "changed": previous_password != updated_password
+            }
         else:
             return {"success": False, "code": response.status_code, "text": response.text}
     else:
         return {"success": False, "reason": "Could not get secret to be modified",
                 "code": full_secret_response.status_code, "text": full_secret_response.text}
+
+
+def compare_item_lists(former: list[dict[str, str | int]], latter: list[dict[str, str | int]]) -> bool:
+    # Made to compare lists of dicts, like the ones you have in the "items" field of a Secret
+    # Returns true when both lists contain all the same dicts
+    if len(former) != len(latter):
+        return False
+
+    temp_latter = latter.copy()
+
+    for dict1 in former:
+        match_found = False
+        for latter_dict in temp_latter:
+            if all(dict1.get(k) == v for k, v in latter_dict.items()):
+                temp_latter.remove(latter_dict)
+                match_found = True
+                break
+        if not match_found:
+            return False
+    return True
 
 
 def update_secret_by_body(secret_name: str,
@@ -1001,6 +1028,7 @@ def update_secret_by_body(secret_name: str,
         # if they have done that, we set the field to "None"
         # otherwise we keep the previous value
         previous_secret = full_secret_response.json()
+        former_items = previous_secret.get("items")
         updated_items = get_secret_body(secret_name=secret_name,
                                         secret_type=secret_type,
                                         folder_id=folder_id,
@@ -1037,7 +1065,10 @@ def update_secret_by_body(secret_name: str,
                                     **authenticated_headers,
                                     "Content-Type": "application/json"})
         if response.status_code == 200:
-            return {"success": True, "code": response.status_code, "data": {"secret_id": response.json().get("id")}}
+            return {"success": True,
+                    "code": response.status_code,
+                    "data": {"secret_id": response.json().get("id")},
+                    "changed": not compare_item_lists(former_items, merged_items)}
         else:
             return {"success": False, "code": response.status_code, "data": response.text}
     else:
@@ -1292,7 +1323,7 @@ def main():
 
             else:
                 result["data"] = res.get("data")
-                result["changed"] = True
+                result["changed"] = res.get("changed")
                 module.exit_json(**result)
 
     elif action == "update":
@@ -1310,7 +1341,7 @@ def main():
 
             else:
                 result["data"] = res.get("text")
-                result["changed"] = True
+                result["changed"] = res.get("changed")
                 module.exit_json(**result)
 
 
