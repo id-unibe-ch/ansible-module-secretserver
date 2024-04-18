@@ -211,10 +211,30 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
       debug:
         var: get_secret
         
+#      RETURNS:
+#        ok: [your_host] => {
+#          "get_secret": {
+#              "changed": false,
+#              "content": {
+#                  "Notes": "{'one': 'two', 'three': 'four'}",
+#                  "Password": "supersecretpassword",
+#                  "Username": "your_username",
+#                  "folder_id": "999",
+#                  "id": "12345",
+#                  "name": "hello world",
+#                  "type": "generic"
+#              },
+#              "failed": false
+#          }
+#        }
+        
     - name: access a field from a python dict we stored in the notes field
       debug:
-        msg: "{{ (get_secret['content']['Notes'] | from_yaml)['key1'] }}"
-
+        msg: "{{ (get_secret['content']['Notes'] | from_yaml)['one'] }}"
+        
+#        RETURNS:
+#          ok: [your_host] => "two"
+            
     - name: Search trough all the secret names
       secretserver:
         secertserver_password: "{{ vault_secretserver_password }}"
@@ -228,8 +248,47 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
     - name: dump the secret result
       debug:
         var: search_secret
+        
+#        RETURNS:
+#          ok: [your_host] => {
+#            "search_secret": {
+#                "changed": false,
+#                "content": [
+#                    {
+#                        "id": "001",
+#                        "name": "masterloginkey"
+#                    },
+#                    {
+#                        "id": "002",
+#                        "name": "windows_login"
+#                    },
+#                    {
+#                        "id": "003",
+#                        "name": "login for that one website"
+#                    },
+#                    {
+#                        "id": "004",
+#                        "name": "Duplicate of login for that one website"
+#                    },
+#                    {
+#                        "id": "005",
+#                        "name": "Duplicate of login for that one website_final"
+#                    },
+#                    {
+#                        "id": "006",
+#                        "name": "Duplicate of login for that one website_final_final"
+#                    },
+#                    {
+#                        "id": "007",
+#                        "name": "Duplicate of login for that one website_final_final_2.0"
+#                    }
+#                ],
+#                "failed": false
+#            }
+#        }
 
-    - name: If you narrow down your search enough, so only one secretname matches your search, you get the whle secret details
+
+    - name: If you narrow down your search enough, so only one secretname matches your search, you get the whole secret details, as if you searched by ID
       secretserver:
         secertserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
@@ -287,6 +346,17 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
     - name: dump the secret result
       debug:
         var: generic_account
+          
+#      RETURNS:
+#        ok: [your_host] => {
+#          "generic_account": {
+#              "changed": true,
+#              "data": {
+#                  "secret_id": 9876
+#              },
+#              "failed": false
+#          }
+#        }
 
     - name: Create a website login
       secretserver:
