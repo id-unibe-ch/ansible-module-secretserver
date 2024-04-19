@@ -1217,13 +1217,11 @@ def main():
             module.fail_json(msg="You must specify a search_text to use the search function", **result)
 
     elif action == "upsert":
-        for key in ["secret_name", "password", "folder_id", "type"]:
+        for key in ["secret_name", "folder_id", "type"]:
             if module.params.get(key) is None:
                 module.fail_json(msg=f"You must specify a {key} to use the upsert function", **result)
         if not int(module.params.get("folder_id")):
             module.fail_json(msg=f"the folder_id must be parseable to an integer", **result)
-        if module.params.get("secret_id") and not int(module.params.get("secret_id")):
-            module.fail_json(msg=f"the secret_id must be parseable to an integer", **result)
 
         if module.params.get("secret_type"):
             secret_type = module.params.get("secret_type")
