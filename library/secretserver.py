@@ -211,7 +211,7 @@ EXAMPLES = r'''
   tasks:
     - name: Get a single Secret by its ID
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: get
@@ -225,7 +225,7 @@ EXAMPLES = r'''
 
     - name: Search trough all the secret names
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: search
@@ -239,7 +239,7 @@ EXAMPLES = r'''
 
     - name: If you narrow down your search enough, so only one secretname matches your search, you get the whle secret details
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: search
@@ -263,7 +263,7 @@ EXAMPLES = r'''
 
     - name: make a search with a personal access token
       secretserver:
-        secertserver_token: "{{ env_vars['SECRET_SERVER_TOKEN'] }}"
+        secretserver_token: "{{ env_vars['SECRET_SERVER_TOKEN'] }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: get
@@ -277,7 +277,7 @@ EXAMPLES = r'''
 
     - name: Create a generic account
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: upsert
@@ -298,7 +298,7 @@ EXAMPLES = r'''
 
     - name: Create a website login
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: upsert
@@ -318,7 +318,7 @@ EXAMPLES = r'''
 
     - name: Create a database account
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: upsert
@@ -337,7 +337,7 @@ EXAMPLES = r'''
 
     - name: Create a server account
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: upsert
@@ -356,7 +356,7 @@ EXAMPLES = r'''
 
     - name: Change the username and password of a Secret by searching for the secret
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: upsert
@@ -374,7 +374,7 @@ EXAMPLES = r'''
 
     - name: Change the password of a Secret by secret id
       secretserver:
-        secertserver_password: "{{ vault_secretserver_password }}"
+        secretserver_password: "{{ vault_secretserver_password }}"
         secretserver_username: "{{ vault_secretserver_username }}"
         secretserver_base_url: "{{ secretserver_base_url }}"
         action: update
