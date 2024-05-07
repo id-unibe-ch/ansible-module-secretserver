@@ -3,6 +3,7 @@
 # Copyright: (c) This module was created in 2024 by the IT-Services Office of the University of Bern
 # MIT License
 from __future__ import (absolute_import, division, print_function)
+from typing import List, Dict, Union
 
 __metaclass__ = type
 
@@ -831,7 +832,7 @@ def get_secret_body(secret_name: str,
     }
 
 
-def search_by_name(search_text: str) -> list | dict:
+def search_by_name(search_text: str) -> Union[list, dict]:
     url = f"{base_url}api/v2/secrets?filter.searchText={search_text}"
     response = requests.request("GET", url, headers=authenticated_headers, data={})
     if response.status_code == 200:
@@ -985,7 +986,7 @@ def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
                 "code": full_secret_response.status_code, "text": full_secret_response.text}
 
 
-def compare_item_lists(former: list[dict[str, str | int]], latter: list[dict[str, str | int]]) -> bool:
+def compare_item_lists(former: List[Dict[str, Union[str, int]]], latter: List[Dict[str, Union[str, int]]]) -> bool:
     # Made to compare lists of dicts, like the ones you have in the "items" field of a Secret
     # Returns true when both lists contain all the same dicts
     if len(former) != len(latter):
