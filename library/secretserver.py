@@ -1046,9 +1046,9 @@ def update_secret_by_body(secret_name: str,
                                         private_key=private_key,
                                         public_key=public_key).get("items")
         merged_items = []
-        for previous_item in previous_secret.get("items"):
-            updated_item = next(item for item in updated_items
-                                if item.get("fieldName") == previous_item.get("fieldName"))
+        for previous_item in previous_secret.get("items", []):
+            updated_item = next(
+                (item for item in updated_items if item.get("fieldId") == previous_item.get("fieldId")), None)
             if updated_item.get("itemValue") is None:
                 merged_items.append(previous_item)
             elif updated_item.get("itemValue") == "set_to_none":
