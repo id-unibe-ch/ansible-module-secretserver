@@ -1021,7 +1021,6 @@ def update_secret_by_body(secret_name: str,
                           location: str,
                           private_key: str,
                           public_key: str) -> dict:
-    print("running update_secret_by_body")
     full_secret_response = get_full_secret(secret_id)
     if full_secret_response.status_code == 200 and full_secret_response.json():
         # If the user has not provided a field, it would get overwritten with "none"
@@ -1127,8 +1126,6 @@ def update_secret(secret_name: str,
                                   f"username was {current_secret.get('Username')}, you specified {user_name}",
                         "search_result": search_result}
         elif isinstance(search_result.get('content'), list):
-            print("we have a list")
-            print(f"its len is {len(search_result.get('content'))}")
             if len(search_result.get('content')) == 0:
                 return create_secret(secret_name=secret_name,
                                      user_name=user_name,
@@ -1153,7 +1150,6 @@ def update_secret(secret_name: str,
 
 
 def main():
-    print("executing main")
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
         secretserver_password=dict(type='str', required=False, no_log=True),
@@ -1295,7 +1291,6 @@ def main():
             module.fail_json(msg=f"error searching for secret {res}", **result)
 
     elif action == "upsert":
-        print("executing upsert")
         if module.check_mode:
             result["comment"] = "Upsert will do nothing in check mode"
             module.exit_json(**result)
@@ -1316,7 +1311,6 @@ def main():
                                 private_key=module.params.get("private_key"),
                                 public_key=module.params.get("public_key")
                                 )
-            print(f"res is {res}")
             if not res.get("success"):
                 module.fail_json(msg=f"error upserting secret {res}", **result)
 
@@ -1334,7 +1328,6 @@ def main():
                 secret_id=int(module.params.get("secret_id")),
                 updated_password=module.params.get("password")
             )
-            print(f"res is {res}")
             if not res.get("success"):
                 module.fail_json(msg=f"error updating secret {res}", **result)
 
@@ -1345,5 +1338,4 @@ def main():
 
 
 if __name__ == '__main__':
-    print("entrypoint")
     main()
