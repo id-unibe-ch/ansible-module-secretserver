@@ -26,7 +26,8 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
    ansible-config dump |grep DEFAULT_MODULE_PATH
    ```
 2. Clone the module to one of those locations
-3. Use the module like any other (without the FQCN because, again, not part of a collection)
+3. Make sure you have the `requests` python module installed on all machines that will run this ansible module
+4. Use the module like any other (without the FQCN because, again, not part of a collection)
 
 ## Parameters
 
