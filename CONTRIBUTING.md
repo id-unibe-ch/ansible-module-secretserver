@@ -17,5 +17,10 @@ That means:
 ## HOW DO I DEBUG DURING THE DEV PROCESS?
 
 Ansible makes it _really_ hard to get good insight into a module.
-The most reliable way is to log to stdout and make your function not return anything.
-At this point, Ansible will throw an error and dump the module's stdout.
+I suggest setting the debug environment variable
+````bash
+export ANSIBLE_DEBUG=True
+````
+This will then print all kind of debug info to your screen.
+In this mode, you can simply use `print` within your python code to have it show up during the run.
+I heavily encourage turning debug mode back off in production, because passwords will be printed to your screen, even if they are specified as no-log.

@@ -1149,6 +1149,10 @@ def update_secret(secret_name: str,
         return {"success": False, "reason": "Could not lookup if secret exists", "search_result": search_result}
 
 
+def debug(var):
+    print(var)
+
+
 def main():
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
@@ -1192,12 +1196,6 @@ def main():
         argument_spec=module_args,
         supports_check_mode=True
     )
-
-    # if the user is working with this module in only check mode we do not
-    # want to make any changes to the environment, just return the current
-    # state with no modifications
-    if module.check_mode:
-        module.exit_json(**result)
 
     # input validation
     permitted_actions = ["search", "get", "upsert", "update"]
@@ -1292,8 +1290,7 @@ def main():
 
     elif action == "upsert":
         if module.check_mode:
-            result["comment"] = "Upsert will do nothing in check mode"
-            module.exit_json(**result)
+            module.exit_json(skipped=True, msg="Upsert will do nothing in check mode")
         else:
             res = update_secret(secret_name=module.params.get("secret_name"),
                                 user_name=module.params.get("user_name"),
@@ -1321,8 +1318,7 @@ def main():
 
     elif action == "update":
         if module.check_mode:
-            result["comment"] = "Upsert will do nothing in check mode"
-            module.exit_json(**result)
+            module.exit_json(skipped=True, msg="Update will do nothing in check mode")
         else:
             res = update_secret_by_id(
                 secret_id=int(module.params.get("secret_id")),
