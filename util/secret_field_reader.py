@@ -16,15 +16,23 @@ def get_all_dummy_secrets():
 
     secrets_in_folder = \
         [get_full_secret(client=client, secret_id=secret_id).json() for secret_id in secret_ids_in_folder]
-    # pprint(secrets_in_folder)
     return secrets_in_folder
 
 
 def create_type_mapping(secrets):
     type_mapping = {secret.get("secretTemplateId"): secret.get("name") for secret in secrets}
-    pprint(type_mapping)
+    extended_type_mapping = {
+        secret.get("name"):
+            {
+                "template_id": secret.get("secretTemplateId"),
+                "items": secret.get("items")
+            }
+        for secret in secrets
+    }
     with open("type_mapping.txt", 'w') as file:
         pprint(type_mapping, stream=file)
+    with open("extended_type_mapping.txt", 'w') as file:
+        pprint(extended_type_mapping, stream=file)
 
 
 def main():
