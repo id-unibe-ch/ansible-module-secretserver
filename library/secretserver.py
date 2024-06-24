@@ -408,8 +408,6 @@ content:
             "name": "Your secret's name"
         }
 '''
-base_url = None
-authenticated_headers = None
 
 
 class Auth:
@@ -418,26 +416,25 @@ class Auth:
         'Accept': '*/*'
     }
 
-    def __init__(self, config):
+    def __init__(self,
+                 base_url: str,
+                 user_name: Union[str, None] = None,
+                 password: Union[str, None] = None,
+                 token: Union[str, None] = None
+                 ):
         self._base_url = base_url
-        self._user_name = config.get("user_name")
-        self._password = config.get("password")
+        self._user_name = user_name
+        self._password = password
         self._token_valid_until = None
-        self._access_token = None
+        self._access_token = token
         self._refresh_token = None
 
-    def get_token(self):
-        if self._access_token is None \
-                or not isinstance(self._token_valid_until, datetime.datetime):
-            return self._get_initial_token()
-
-        if datetime.datetime.now() < self._token_valid_until:
+    def _get_token(self):
+        if self._access_token is not None or isinstance(self._token_valid_until, datetime.datetime):
             return self._access_token
 
-        if self._refresh_token is not None:
-            return self._refresh_access_token()
-
-        return self._get_initial_token()
+        else:
+            return self._get_initial_token()
 
     def _get_initial_token(self):
         url = f"{self._base_url}oauth2/token"
@@ -468,6 +465,15 @@ class Auth:
         self._token_valid_until = datetime.datetime.now() + datetime.timedelta(
             seconds=(response_data.get("expires_in") - 10))
         return self._access_token
+
+    def get_authenticated_headers(self) -> dict[str, str]:
+        return {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self._get_token()}"
+        }
+
+    def get_base_url(self) -> str:
+        return self._base_url
 
 
 def get_secret_body(secret_name: str,
@@ -832,9 +838,9 @@ def get_secret_body(secret_name: str,
     }
 
 
-def search_by_name(search_text: str) -> Union[list, dict]:
-    url = f"{base_url}api/v2/secrets?filter.searchText={search_text}"
-    response = requests.request("GET", url, headers=authenticated_headers, data={})
+def search_by_name(client: Auth, search_text: str) -> Union[list, dict]:
+    url = f"{client.get_base_url()}api/v2/secrets?filter.searchText={search_text}"
+    response = requests.request("GET", url, headers=client.get_authenticated_headers(), data={})
     if response.status_code == 200:
         json_data = json.loads(response.text)
         records_list = []
@@ -842,8 +848,7 @@ def search_by_name(search_text: str) -> Union[list, dict]:
             for record in json_data.get("records"):
                 records_list.append({"name": to_text(record.get("name")), "id": to_text(record.get("id"))})
         return {"success": True, "content": records_list} if len(records_list) > 1 or len(records_list) == 0 \
-            else lookup_single_secret(
-            records_list[0].get("id"))
+            else lookup_single_secret(client=client, secret_id=records_list[0].get("id"))
     else:
         return {"success": False,
                 "status": response.status_code,
@@ -851,12 +856,16 @@ def search_by_name(search_text: str) -> Union[list, dict]:
                 }
 
 
-def get_full_secret(secret_id: int) -> requests.Response:
-    url = f"{base_url}api/v2/secrets/{secret_id}"
-    return requests.request("GET", url, headers=authenticated_headers, data={})
+def get_full_secret(client: Auth, secret_id: int) -> requests.Response:
+    return requests.request(
+        method="GET",
+        url=f"{client.get_base_url()}api/v2/secrets/{secret_id}",
+        headers=client.get_authenticated_headers(),
+        data={}
+    )
 
 
-def lookup_single_secret(secret_id: int) -> dict:
+def lookup_single_secret(client: Auth, secret_id: int) -> dict:
     type_mapping = {
         6027: "keypair",
         6010: "generic",
@@ -891,7 +900,7 @@ def lookup_single_secret(secret_id: int) -> dict:
         6034: "x509",
         7039: "zos_mainframe"
     }
-    response = get_full_secret(secret_id)
+    response = get_full_secret(client=client, secret_id=secret_id)
     if response.status_code == 200:
         json_data = json.loads(response.text)
         content = {}
@@ -911,6 +920,7 @@ def lookup_single_secret(secret_id: int) -> dict:
 
 
 def create_secret(
+        client: Auth,
         secret_name: str,
         user_name: str,
         password: str,
@@ -927,8 +937,8 @@ def create_secret(
         private_key: str,
         public_key: str
 ) -> dict:
-    response = requests.request(method="POST", url=f"{base_url}api/v1/secrets", headers={
-        **authenticated_headers,
+    response = requests.request(method="POST", url=f"{client.get_base_url()}api/v1/secrets", headers={
+        **client.get_authenticated_headers(),
         "Content-Type": "application/json"}, data=json.dumps(get_secret_body(secret_name=secret_name,
                                                                              secret_type=secret_type,
                                                                              folder_id=folder_id,
@@ -956,8 +966,8 @@ def create_secret(
         return {"success": False, "data": {"code": response.status_code, "payload": json_data}}
 
 
-def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
-    full_secret_response = get_full_secret(secret_id)
+def update_secret_by_id(client: Auth, secret_id: int, updated_password: str) -> dict:
+    full_secret_response = get_full_secret(client=client, secret_id=secret_id)
     if full_secret_response.status_code == 200 and full_secret_response.json():
         previous_secret = full_secret_response.json()
         previous_items = previous_secret.get("items")
@@ -968,9 +978,9 @@ def update_secret_by_id(secret_id: int, updated_password: str) -> dict:
                 item["itemValue"] = updated_password
                 break
         previous_secret["items"] = previous_items
-        url = f"{base_url}api/v1/secrets/{secret_id}"
+        url = f"{client.get_base_url()}api/v1/secrets/{secret_id}"
         response = requests.put(url, json=previous_secret, headers={
-            **authenticated_headers,
+            **client.get_authenticated_headers(),
             "Content-Type": "application/json"})
         if response.status_code == 200:
             return {
@@ -1006,7 +1016,8 @@ def compare_item_lists(former: List[Dict[str, Union[str, int]]], latter: List[Di
     return True
 
 
-def update_secret_by_body(secret_name: str,
+def update_secret_by_body(client: Auth,
+                          secret_name: str,
                           user_name: str,
                           password: str,
                           folder_id: int,
@@ -1021,7 +1032,7 @@ def update_secret_by_body(secret_name: str,
                           location: str,
                           private_key: str,
                           public_key: str) -> dict:
-    full_secret_response = get_full_secret(secret_id)
+    full_secret_response = get_full_secret(client=client, secret_id=secret_id)
     if full_secret_response.status_code == 200 and full_secret_response.json():
         # If the user has not provided a field, it would get overwritten with "none"
         # We don't want that, so we need to check each field if the user set it to the special value "set_to_none"
@@ -1059,10 +1070,10 @@ def update_secret_by_body(secret_name: str,
                 new_item["itemValue"] = updated_item.get("itemValue")
                 merged_items.append(new_item)
         previous_secret["items"] = merged_items
-        request_url = f"{base_url}api/v1/secrets/{secret_id}"
+        request_url = f"{client.get_base_url()}api/v1/secrets/{secret_id}"
         response = requests.put(request_url, json=previous_secret,
                                 headers={
-                                    **authenticated_headers,
+                                    **client.get_authenticated_headers(),
                                     "Content-Type": "application/json"})
         if response.status_code == 200:
             return {"success": True,
@@ -1076,7 +1087,8 @@ def update_secret_by_body(secret_name: str,
                 "code": full_secret_response.status_code, "data": full_secret_response.text}
 
 
-def update_secret(secret_name: str,
+def update_secret(client: Auth,
+                  secret_name: str,
                   user_name: str,
                   password: str,
                   folder_id: int,
@@ -1092,7 +1104,7 @@ def update_secret(secret_name: str,
                   private_key: str,
                   public_key: str
                   ) -> dict:
-    search_result = search_by_name(secret_name)
+    search_result = search_by_name(client=client, search_text=secret_name)
     # print(f"search_result is {search_result}")
     if search_result.get('success'):
         if isinstance(search_result.get('content'), dict):
@@ -1102,7 +1114,8 @@ def update_secret(secret_name: str,
             # print(f'current folder {current_secret.get("folder_id")}, looking for {folder_id}, they are equal {int(current_secret.get("folder_id")) == folder_id}')
             if current_secret.get("Username") == user_name and int(current_secret.get("folder_id")) == folder_id:
                 # print("must update secret")
-                return update_secret_by_body(secret_name=secret_name,
+                return update_secret_by_body(client=client,
+                                             secret_name=secret_name,
                                              user_name=user_name,
                                              password=password,
                                              folder_id=folder_id,
@@ -1127,7 +1140,8 @@ def update_secret(secret_name: str,
                         "search_result": search_result}
         elif isinstance(search_result.get('content'), list):
             if len(search_result.get('content')) == 0:
-                return create_secret(secret_name=secret_name,
+                return create_secret(client=client,
+                                     secret_name=secret_name,
                                      user_name=user_name,
                                      password=password,
                                      folder_id=folder_id,
@@ -1149,8 +1163,23 @@ def update_secret(secret_name: str,
         return {"success": False, "reason": "Could not lookup if secret exists", "search_result": search_result}
 
 
-def debug(var):
-    print(var)
+def get_all_secret_ids_in_folder(client: Auth, folder_id: int) -> list:
+    fetch_again = True
+    results = []
+    start_index = 0
+    while fetch_again:
+        response = requests.request(
+                    method="GET",
+                    url=f"{client.get_base_url()}api/v1/secrets/lookup",
+                    headers=client.get_authenticated_headers(),
+                    params={"filter.folderId": folder_id, "take": 100, "skip": start_index},
+                    data={}
+                    )
+        parsed = response.json()
+        results.extend([record['id'] for record in parsed.get('records') if 'id' in record])
+        fetch_again = parsed.get("hasNext")
+        start_index += 100
+    return results
 
 
 def main():
@@ -1240,40 +1269,29 @@ def main():
                 module.fail_json(msg=f"you must specify {field} to update an item", **result)
 
     # Authenticating with the Secret Server
-    global base_url
-    base_url = module.params.get("secretserver_base_url")
-    global authenticated_headers
-    if module.params.get("secretserver_token") is not None:
-        authenticated_headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {module.params.get('secretserver_token')}"
-        }
-    else:
-        if module.params.get("secretserver_password") is None:
-            module.fail_json(msg="You must pass either secretserver_token or secretserver_password", **result)
-        try:
-            client = Auth({
-                "user_name": module.params.get("secretserver_username"),
-                "password": module.params.get("secretserver_password"),
-            })
+    client = None
+    if module.params.get("secretserver_password") is None and module.params.get('secretserver_token') is None:
+        module.fail_json(msg="You must pass either secretserver_token or secretserver_password", **result)
+    try:
+        client = Auth(user_name=module.params.get("secretserver_username"),
+                      password=module.params.get("secretserver_password"),
+                      token=module.params.get('secretserver_token'),
+                      base_url=module.params.get("secretserver_base_url")
+                      )
 
-            authenticated_headers = {
-                "Accept": "application/json",
-                "Authorization": f"Bearer {client.get_token()}"
-            }
-        except Exception as e:
-            if type(e) == type(TypeError) and str(e) == "unsupported operand type(s) for -: 'NoneType' and 'int'":
-                module.fail_json(msg="could not log into Secret Server. "
-                                     "This is most likely because you specified the wrong username/password combination"
-                                 , **result)
-            else:
-                module.fail_json(msg=f"could not log into Secret Server: {e}, {type(e)}, :{str(e)}:", **result)
-        if not authenticated_headers:
-            module.fail_json(msg=f"error authenticating with the Secret Server", **result)
+    except Exception as e:
+        if type(e) == type(TypeError) and str(e) == "unsupported operand type(s) for -: 'NoneType' and 'int'":
+            module.fail_json(msg="could not log into Secret Server. "
+                                 "This is most likely because you specified the wrong username/password combination",
+                             **result)
+        else:
+            module.fail_json(msg=f"could not log into Secret Server: {e}, {type(e)}, :{str(e)}:", **result)
+    if client is None or not client.get_authenticated_headers():
+        module.fail_json(msg=f"error authenticating with the Secret Server", **result)
 
     # executing the action
     if action == "get":
-        res = lookup_single_secret(int(module.params.get("secret_id")))
+        res = lookup_single_secret(client=client, secret_id=int(module.params.get("secret_id")))
         if res.get("success"):
             result["content"] = res.get("content")
             module.exit_json(**result)
@@ -1281,7 +1299,7 @@ def main():
             module.fail_json(msg=f"error getting secret {res}", **result)
 
     elif action == "search":
-        res = search_by_name(module.params.get("search_text"))
+        res = search_by_name(client=client, search_text=module.params.get("search_text"))
         if res.get("success"):
             result["content"] = res.get("content")
             module.exit_json(**result)
@@ -1292,7 +1310,8 @@ def main():
         if module.check_mode:
             module.exit_json(skipped=True, msg="Upsert will do nothing in check mode")
         else:
-            res = update_secret(secret_name=module.params.get("secret_name"),
+            res = update_secret(client=client,
+                                secret_name=module.params.get("secret_name"),
                                 user_name=module.params.get("user_name"),
                                 password=module.params.get("password"),
                                 folder_id=int(module.params.get("folder_id")),
@@ -1321,6 +1340,7 @@ def main():
             module.exit_json(skipped=True, msg="Update will do nothing in check mode")
         else:
             res = update_secret_by_id(
+                client=client,
                 secret_id=int(module.params.get("secret_id")),
                 updated_password=module.params.get("password")
             )
