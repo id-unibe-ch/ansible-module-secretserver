@@ -932,6 +932,11 @@ def create_secret(
     json_data = json.loads(response.text)
     if response.status_code == 200:
         return {"success": True,
+                "changed": True,
+                "diff": {
+                    "before": "absent",
+                    "after": extract_readable_secret_from_secretserver_response(json_data)
+                },
                 "data": {
                     "secret_id": json_data.get("id")
                 }
@@ -1082,7 +1087,7 @@ def update_secret(client: Auth,
                   certificate: str
                   ) -> dict:
     search_result = search_by_name(client=client, search_text=secret_name)
-    # print(f"search_result is {search_result}")
+    print(f"search_result is {search_result}")
     if search_result.get('success'):
         if isinstance(search_result.get('content'), dict):
             # print("we have success and a dict")
@@ -1118,6 +1123,7 @@ def update_secret(client: Auth,
                                   f"username was {current_secret.get('Username')}, you specified {user_name}",
                         "search_result": search_result}
         elif isinstance(search_result.get('content'), list):
+            print("creating a new secret")
             if len(search_result.get('content')) == 0:
                 return create_secret(client=client,
                                      secret_name=secret_name,
@@ -1160,6 +1166,15 @@ def get_all_secret_ids_in_folder(client: Auth, folder_id: int) -> list:
         fetch_again = parsed.get("hasNext")
         start_index += 100
     return results
+
+
+def extract_readable_secret_from_secretserver_response(response):
+    res = {"secret_id": response.get("id"),
+           "folder_id": response.get("folderId"),
+           }
+    for item in response.get("items"):
+        res[item.get("fieldName")] = item.get("itemValue")
+    return res
 
 
 def main():
@@ -1313,8 +1328,11 @@ def main():
                 module.fail_json(msg=f"error upserting secret {res}", **result)
 
             else:
+                print("res is", res)
+                # exit(1)
                 result["data"] = res.get("data")
                 result["changed"] = res.get("changed")
+                result["diff"] = res.get("diff")
                 module.exit_json(**result)
 
     elif action == "update":
