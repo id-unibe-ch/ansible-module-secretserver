@@ -134,7 +134,7 @@ options:
         type: str
     password: 
         description: The value for the "Password" field.
-            Required for the "upsert" action with all secret types except for "keypair".
+            Required for the "upsert" action with all secret types except for "x509".
             Required for the "update" action.
         required: false
         type: str
@@ -168,24 +168,29 @@ options:
             Optional for the "upsert" action with any secret type.
         required: false
         type: str
-    host: 
-        description:The value for the "Host" field.
-            Optional for the "upsert" action with the "keypair" secret type.
+    common_name: 
+        description:The value for the "CN" field.
+            Optional for the "upsert" action with the "x509" secret type.
+        required: false
+        type: str
+    alt_name: 
+        description:The value for the "SubjAltName" field.
+            Optional for the "upsert" action with the "x509" secret type.
         required: false
         type: str
     location: 
         description:The value for the "Location" field.
-            Optional for the "upsert" action with the "keypair" secret type.
+            Optional for the "upsert" action with the "x509" secret type.
         required: false
         type: str
     private_key: 
         description:The value for the "Private key" field.
-            Optional for the "upsert" action with the "keypair" secret type.
+            Optional for the "upsert" action with the "x509" secret type.
         required: false
         type: str
-    public_key: 
-        description:The value for the "Public key" field.
-            Optional for the "upsert" action with the "keypair" secret type.
+    certificate: 
+        description:The value for the "Certificate" field.
+            Optional for the "upsert" action with the "x509" secret type.
         required: false
         type: str
     
@@ -487,10 +492,11 @@ def get_secret_body(secret_name: str,
                     database: str,
                     connection_string: str,
                     url: str,
-                    host: str,
+                    common_name: str,
+                    alt_name: str,
                     location: str,
                     private_key: str,
-                    public_key: str
+                    certificate: str
                     ) -> dict:
     type_mapping = {'database': {'items': [{'fieldDescription': 'The Database name or instance.',
                                             'fieldId': 138,
@@ -714,7 +720,7 @@ def get_secret_body(secret_name: str,
                                         'isList': False,
                                         'isNotes': False,
                                         'isPassword': False,
-                                        'itemValue': 'changeme',
+                                        'itemValue': common_name,
                                         'listType': 'None',
                                         'slug': 'cn'},
                                        {'fieldDescription': '',
@@ -726,7 +732,7 @@ def get_secret_body(secret_name: str,
                                         'isList': False,
                                         'isNotes': False,
                                         'isPassword': False,
-                                        'itemValue': 'changeme',
+                                        'itemValue': alt_name,
                                         'listType': 'None',
                                         'slug': 'subjaltname'},
                                        {'fieldDescription': 'Where is the key stored',
@@ -738,7 +744,7 @@ def get_secret_body(secret_name: str,
                                         'isList': False,
                                         'isNotes': False,
                                         'isPassword': False,
-                                        'itemValue': 'changeme',
+                                        'itemValue': location,
                                         'listType': 'None',
                                         'slug': 'location'},
                                        {'fieldDescription': '',
@@ -750,7 +756,7 @@ def get_secret_body(secret_name: str,
                                         'isList': False,
                                         'isNotes': False,
                                         'isPassword': True,
-                                        'itemValue': 'changeme',
+                                        'itemValue': password,
                                         'listType': 'None',
                                         'slug': 'password'},
                                        {'fieldDescription': 'Base64',
@@ -762,7 +768,7 @@ def get_secret_body(secret_name: str,
                                         'isList': False,
                                         'isNotes': True,
                                         'isPassword': False,
-                                        'itemValue': 'changeme',
+                                        'itemValue': private_key,
                                         'listType': 'None',
                                         'slug': 'private-key'},
                                        {'fieldDescription': 'Base64',
@@ -774,7 +780,7 @@ def get_secret_body(secret_name: str,
                                         'isList': False,
                                         'isNotes': True,
                                         'isPassword': False,
-                                        'itemValue': 'changeme',
+                                        'itemValue': certificate,
                                         'listType': 'None',
                                         'slug': 'certificate'},
                                        {'fieldDescription': '',
@@ -786,7 +792,7 @@ def get_secret_body(secret_name: str,
                                         'isList': False,
                                         'isNotes': True,
                                         'isPassword': False,
-                                        'itemValue': 'changeme',
+                                        'itemValue': notes,
                                         'listType': 'None',
                                         'slug': 'notes'}],
                              'template_id': 6034}}
@@ -898,10 +904,11 @@ def create_secret(
         fqdn: str,
         logon_domain: str,
         database: str,
-        host: str,
+        common_name: str,
+        alt_name: str,
         location: str,
         private_key: str,
-        public_key: str
+        certificate: str
 ) -> dict:
     response = requests.request(method="POST", url=f"{client.get_base_url()}api/v1/secrets", headers={
         **client.get_authenticated_headers(),
@@ -916,10 +923,11 @@ def create_secret(
                                                                              database=database,
                                                                              connection_string=connection_string,
                                                                              url=url,
-                                                                             host=host,
+                                                                             common_name=common_name,
+                                                                             alt_name=alt_name,
                                                                              location=location,
                                                                              private_key=private_key,
-                                                                             public_key=public_key)))
+                                                                             certificate=certificate)))
 
     json_data = json.loads(response.text)
     if response.status_code == 200:
@@ -994,10 +1002,11 @@ def update_secret_by_body(client: Auth,
                           logon_domain: str,
                           database: str,
                           secret_id: int,
-                          host: str,
+                          common_name: str,
+                          alt_name: str,
                           location: str,
                           private_key: str,
-                          public_key: str) -> dict:
+                          certificate: str) -> dict:
     full_secret_response = get_full_secret(client=client, secret_id=secret_id)
     if full_secret_response.status_code == 200 and full_secret_response.json():
         # If the user has not provided a field, it would get overwritten with "none"
@@ -1017,10 +1026,11 @@ def update_secret_by_body(client: Auth,
                                         database=database,
                                         connection_string=connection_string,
                                         url=url,
-                                        host=host,
+                                        common_name=common_name,
+                                        alt_name=alt_name,
                                         location=location,
                                         private_key=private_key,
-                                        public_key=public_key).get("items")
+                                        certificate=certificate).get("items")
         merged_items = []
         for previous_item in previous_secret.get("items", []):
             updated_item = next(
@@ -1065,10 +1075,11 @@ def update_secret(client: Auth,
                   notes: str,
                   fqdn: str,
                   logon_domain: str,
-                  host: str,
+                  common_name: str,
+                  alt_name: str,
                   location: str,
                   private_key: str,
-                  public_key: str
+                  certificate: str
                   ) -> dict:
     search_result = search_by_name(client=client, search_text=secret_name)
     # print(f"search_result is {search_result}")
@@ -1093,10 +1104,11 @@ def update_secret(client: Auth,
                                              logon_domain=logon_domain,
                                              database=database,
                                              secret_id=int(current_secret["id"]),
-                                             host=host,
+                                             common_name=common_name,
+                                             alt_name=alt_name,
                                              location=location,
                                              private_key=private_key,
-                                             public_key=public_key)
+                                             certificate=certificate)
             else:
                 return {"success": False,
                         "reason": "We found a secret by that name, but not in the folder or with the username"
@@ -1119,10 +1131,11 @@ def update_secret(client: Auth,
                                      fqdn=fqdn,
                                      logon_domain=logon_domain,
                                      database=database,
-                                     host=host,
+                                     common_name=common_name,
+                                     alt_name=alt_name,
                                      location=location,
                                      private_key=private_key,
-                                     public_key=public_key
+                                     certificate=certificate
                                      )
             else:
                 return {"success": False, "reason": "Secret name not unique", "search_result": search_result}
@@ -1170,10 +1183,11 @@ def main():
         fqdn=dict(type='str', required=False),
         logon_domain=dict(type='str', required=False),
         notes=dict(type='str', required=False),
-        host=dict(type='str', required=False),
+        common_name=dict(type='str', required=False),
+        alt_name=dict(type='str', required=False),
         location=dict(type='str', required=False),
         private_key=dict(type='str', required=False, no_log=True),
-        public_key=dict(type='str', required=False)
+        certificate=dict(type='str', required=False)
 
     )
 
@@ -1221,7 +1235,7 @@ def main():
                                 "database": ["secret_name", "database", "user_name", "password"],
                                 "website": ["secret_name", "url", "user_name", "password"],
                                 "generic": ["secret_name", "user_name", "password"],
-                                "keypair": ["secret_name"]
+                                "x509": ["secret_name"]
                                 }
             if secret_type not in acceptable_types.keys:
                 module.fail_json(msg=f"the secret type must be one of {', '.join(acceptable_types)}", **result)
@@ -1289,10 +1303,11 @@ def main():
                                 notes=module.params.get("notes"),
                                 fqdn=module.params.get("fqdn"),
                                 logon_domain=module.params.get("logon_domain"),
-                                host=module.params.get("host"),
+                                common_name=module.params.get("common_name"),
+                                alt_name=module.params.get("alt_name"),
                                 location=module.params.get("location"),
                                 private_key=module.params.get("private_key"),
-                                public_key=module.params.get("public_key")
+                                certificate=module.params.get("certificate")
                                 )
             if not res.get("success"):
                 module.fail_json(msg=f"error upserting secret {res}", **result)
