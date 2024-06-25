@@ -17,7 +17,18 @@ That means:
 ## HOW DO I DEBUG DURING THE DEV PROCESS?
 
 Ansible makes it _really_ hard to get good insight into a module.
-I suggest setting the debug environment variable
+
+There are two ways i found to debug:
+
+### One
+
+You can use `print` within your code and then before the `module.exit_json` call you just `exit(1)`.
+This will cause Ansible to think your module encountered an error and dump all the stout to your console.
+Much of the formatting will be lost, so you'll have to dig a bit to fid the line you were looking for.
+
+### Two
+
+You can set the debug environment variable
 ````bash
 export ANSIBLE_DEBUG=True
 ````

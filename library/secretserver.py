@@ -966,7 +966,11 @@ def update_secret_by_id(client: Auth, secret_id: int, updated_password: str) -> 
                 "success": True,
                 "code": response.status_code,
                 "text": {"secret_id": response.json().get("id")},
-                "changed": previous_password != updated_password
+                "changed": previous_password != updated_password,
+                "diff": {
+                    "before": extract_readable_secret_from_secretserver_response(previous_secret),
+                    "after": extract_readable_secret_from_secretserver_response(response.json())
+                }
             }
         else:
             return {"success": False, "code": response.status_code, "text": response.text}
@@ -981,17 +985,15 @@ def compare_item_lists(former: List[Dict[str, Union[str, int]]], latter: List[Di
     if len(former) != len(latter):
         return False
 
-    temp_latter = latter.copy()
-
-    for dict1 in former:
-        match_found = False
-        for latter_dict in temp_latter:
-            if all(dict1.get(k) == v for k, v in latter_dict.items()):
-                temp_latter.remove(latter_dict)
-                match_found = True
-                break
-        if not match_found:
+    for former_item in former:
+        latter_item = next(
+            (latter_item for latter_item in latter if latter_item.get("fieldId") == former_item.get("fieldId"))
+            , None)
+        print(f"the equivalent of {former_item} is {latter_item}")
+        if latter_item is None or former_item.get("itemValue") != latter_item.get("itemValue"):
+            print("The dicts are not equal")
             return False
+    print("the dict are equal")
     return True
 
 
@@ -1019,7 +1021,9 @@ def update_secret_by_body(client: Auth,
         # if they have done that, we set the field to "None"
         # otherwise we keep the previous value
         previous_secret = full_secret_response.json()
-        former_items = previous_secret.get("items")
+        backup_copy_of_previous_secret = previous_secret.copy()
+        former_items = previous_secret.get("items").copy()
+        print("previous password:", next((item.get("itemValue") for item in former_items if item.get("fieldName") == "Password" ), None))
         updated_items = get_secret_body(secret_name=secret_name,
                                         secret_type=secret_type,
                                         folder_id=folder_id,
@@ -1060,7 +1064,11 @@ def update_secret_by_body(client: Auth,
             return {"success": True,
                     "code": response.status_code,
                     "data": {"secret_id": response.json().get("id")},
-                    "changed": not compare_item_lists(former_items, merged_items)}
+                    "changed": not compare_item_lists(former_items, merged_items),
+                    "diff": {
+                        "before": extract_readable_secret_from_secretserver_response(backup_copy_of_previous_secret),
+                        "after": extract_readable_secret_from_secretserver_response(response.json())
+                    }}
         else:
             return {"success": False, "code": response.status_code, "data": response.text}
     else:
@@ -1087,7 +1095,7 @@ def update_secret(client: Auth,
                   certificate: str
                   ) -> dict:
     search_result = search_by_name(client=client, search_text=secret_name)
-    print(f"search_result is {search_result}")
+    # print(f"search_result is {search_result}")
     if search_result.get('success'):
         if isinstance(search_result.get('content'), dict):
             # print("we have success and a dict")
@@ -1328,7 +1336,7 @@ def main():
                 module.fail_json(msg=f"error upserting secret {res}", **result)
 
             else:
-                print("res is", res)
+                print("diff is", res.get("diff"))
                 # exit(1)
                 result["data"] = res.get("data")
                 result["changed"] = res.get("changed")
@@ -1350,6 +1358,7 @@ def main():
             else:
                 result["data"] = res.get("text")
                 result["changed"] = res.get("changed")
+                result["diff"] = res.get("diff")
                 module.exit_json(**result)
 
 
