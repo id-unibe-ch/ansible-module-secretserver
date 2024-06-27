@@ -9,6 +9,7 @@ __metaclass__ = type
 
 import json
 import datetime
+import copy
 
 import requests
 from ansible.module_utils.common.text.converters import to_text
@@ -968,7 +969,7 @@ def update_secret_by_id(client: Auth, secret_id: int, updated_password: str) -> 
                 "text": {"secret_id": response.json().get("id")},
                 "changed": previous_password != updated_password,
                 "diff": {
-                    "before": extract_readable_secret_from_secretserver_response(previous_secret),
+                    "before": extract_readable_secret_from_secretserver_response(previous_secret, mask_passwords=True),
                     "after": extract_readable_secret_from_secretserver_response(response.json())
                 }
             }
@@ -984,16 +985,12 @@ def compare_item_lists(former: List[Dict[str, Union[str, int]]], latter: List[Di
     # Returns true when both lists contain all the same dicts
     if len(former) != len(latter):
         return False
-
     for former_item in former:
         latter_item = next(
             (latter_item for latter_item in latter if latter_item.get("fieldId") == former_item.get("fieldId"))
             , None)
-        print(f"the equivalent of {former_item} is {latter_item}")
         if latter_item is None or former_item.get("itemValue") != latter_item.get("itemValue"):
-            print("The dicts are not equal")
             return False
-    print("the dict are equal")
     return True
 
 
@@ -1021,9 +1018,8 @@ def update_secret_by_body(client: Auth,
         # if they have done that, we set the field to "None"
         # otherwise we keep the previous value
         previous_secret = full_secret_response.json()
-        backup_copy_of_previous_secret = previous_secret.copy()
-        former_items = previous_secret.get("items").copy()
-        print("previous password:", next((item.get("itemValue") for item in former_items if item.get("fieldName") == "Password" ), None))
+        backup_copy_of_previous_secret = copy.deepcopy(previous_secret)
+        former_items = previous_secret.get("items", [])
         updated_items = get_secret_body(secret_name=secret_name,
                                         secret_type=secret_type,
                                         folder_id=folder_id,
@@ -1041,7 +1037,7 @@ def update_secret_by_body(client: Auth,
                                         private_key=private_key,
                                         certificate=certificate).get("items")
         merged_items = []
-        for previous_item in previous_secret.get("items", []):
+        for previous_item in former_items:
             updated_item = next(
                 (item for item in updated_items if item.get("fieldId") == previous_item.get("fieldId")), None)
             if updated_item.get("itemValue") is None:
@@ -1064,9 +1060,13 @@ def update_secret_by_body(client: Auth,
             return {"success": True,
                     "code": response.status_code,
                     "data": {"secret_id": response.json().get("id")},
-                    "changed": not compare_item_lists(former_items, merged_items),
+                    "changed": not compare_item_lists(
+                        former=backup_copy_of_previous_secret.get("items", []),
+                        latter=merged_items
+                    ),
                     "diff": {
-                        "before": extract_readable_secret_from_secretserver_response(backup_copy_of_previous_secret),
+                        "before": extract_readable_secret_from_secretserver_response(backup_copy_of_previous_secret,
+                                                                                     mask_passwords=True),
                         "after": extract_readable_secret_from_secretserver_response(response.json())
                     }}
         else:
@@ -1095,15 +1095,10 @@ def update_secret(client: Auth,
                   certificate: str
                   ) -> dict:
     search_result = search_by_name(client=client, search_text=secret_name)
-    # print(f"search_result is {search_result}")
     if search_result.get('success'):
         if isinstance(search_result.get('content'), dict):
-            # print("we have success and a dict")
             current_secret = search_result.get('content')
-            # print(f'current user name is {current_secret.get("Username")}, looking for {user_name}, they are equal {current_secret.get("Username") == user_name}')
-            # print(f'current folder {current_secret.get("folder_id")}, looking for {folder_id}, they are equal {int(current_secret.get("folder_id")) == folder_id}')
             if current_secret.get("Username") == user_name and int(current_secret.get("folder_id")) == folder_id:
-                # print("must update secret")
                 return update_secret_by_body(client=client,
                                              secret_name=secret_name,
                                              user_name=user_name,
@@ -1131,7 +1126,6 @@ def update_secret(client: Auth,
                                   f"username was {current_secret.get('Username')}, you specified {user_name}",
                         "search_result": search_result}
         elif isinstance(search_result.get('content'), list):
-            print("creating a new secret")
             if len(search_result.get('content')) == 0:
                 return create_secret(client=client,
                                      secret_name=secret_name,
@@ -1176,12 +1170,15 @@ def get_all_secret_ids_in_folder(client: Auth, folder_id: int) -> list:
     return results
 
 
-def extract_readable_secret_from_secretserver_response(response):
+def extract_readable_secret_from_secretserver_response(response, mask_passwords: bool = False):
     res = {"secret_id": response.get("id"),
            "folder_id": response.get("folderId"),
            }
+    maskable_field_names = ["Password", "Private key"]
     for item in response.get("items"):
-        res[item.get("fieldName")] = item.get("itemValue")
+        res[item.get("fieldName")] = \
+            "***MASKED_FOR_PRIVACY***" if mask_passwords and \
+            item.get("fieldName") in maskable_field_names else item.get("itemValue")
     return res
 
 
@@ -1336,8 +1333,6 @@ def main():
                 module.fail_json(msg=f"error upserting secret {res}", **result)
 
             else:
-                print("diff is", res.get("diff"))
-                # exit(1)
                 result["data"] = res.get("data")
                 result["changed"] = res.get("changed")
                 result["diff"] = res.get("diff")
