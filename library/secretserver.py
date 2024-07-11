@@ -1038,18 +1038,19 @@ def update_secret_by_body(client: Auth,
                                         certificate=certificate).get("items")
         merged_items = []
         for previous_item in former_items:
-            updated_item = next(
-                (item for item in updated_items if item.get("fieldId") == previous_item.get("fieldId")), None)
-            if updated_item.get("itemValue") is None:
-                merged_items.append(previous_item)
-            elif updated_item.get("itemValue") == "set_to_none":
-                none_item = previous_item
-                none_item["itemValue"] = None
-                merged_items.append(none_item)
-            else:
-                new_item = previous_item
-                new_item["itemValue"] = updated_item.get("itemValue")
-                merged_items.append(new_item)
+            if previous_item.get("itemValue") != "*** Not Valid For Display ***":
+                updated_item = next(
+                    (item for item in updated_items if item.get("fieldId") == previous_item.get("fieldId")), None)
+                if updated_item.get("itemValue") is None:
+                    merged_items.append(previous_item)
+                elif updated_item.get("itemValue") == "set_to_none":
+                    none_item = previous_item
+                    none_item["itemValue"] = None
+                    merged_items.append(none_item)
+                else:
+                    new_item = previous_item
+                    new_item["itemValue"] = updated_item.get("itemValue")
+                    merged_items.append(new_item)
         previous_secret["items"] = merged_items
         request_url = f"{client.get_base_url()}api/v1/secrets/{secret_id}"
         response = requests.put(request_url, json=previous_secret,
