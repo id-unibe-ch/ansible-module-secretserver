@@ -874,6 +874,7 @@ def lookup_single_secret(client: Auth, secret_id: int) -> dict:
                     10053: 'escapeless_password'}
 
     response = get_full_secret(client=client, secret_id=secret_id)
+
     if response.status_code == 200:
         json_data = json.loads(response.text)
         content = {}
@@ -883,7 +884,8 @@ def lookup_single_secret(client: Auth, secret_id: int) -> dict:
             content["folder_id"] = to_text(json_data.get("folderId"))
             content["type"] = type_mapping.get(json_data.get("secretTemplateId"))
             for item in json_data.get("items"):
-                content[to_text(item.get("fieldName"))] = to_text(item.get("itemValue"))
+                if not item.get("isFile"):
+                    content[to_text(item.get("fieldName"))] = to_text(item.get("itemValue"))
         return {"success": True, "content": content}
     else:
         return {"success": False,
@@ -1179,7 +1181,7 @@ def extract_readable_secret_from_secretserver_response(response, mask_passwords:
     for item in response.get("items"):
         res[item.get("fieldName")] = \
             "***MASKED_FOR_PRIVACY***" if mask_passwords and \
-            item.get("fieldName") in maskable_field_names else item.get("itemValue")
+                                          item.get("fieldName") in maskable_field_names else item.get("itemValue")
     return res
 
 
@@ -1234,7 +1236,8 @@ def main():
         module.fail_json(msg=f'Action must be one of {", ".join(permitted_actions)}', **result)
 
     if "http" not in module.params.get("secretserver_base_url"):
-        module.fail_json(msg='You must specify the protocol used to connect to the SecretServer API (HTTP or HTTPS)', **result)
+        module.fail_json(msg='You must specify the protocol used to connect to the SecretServer API (HTTP or HTTPS)',
+                         **result)
 
     action = module.params.get("action")
     if action == "get":
