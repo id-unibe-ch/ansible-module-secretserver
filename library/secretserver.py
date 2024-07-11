@@ -1233,6 +1233,9 @@ def main():
     if module.params.get("action") not in permitted_actions:
         module.fail_json(msg=f'Action must be one of {", ".join(permitted_actions)}', **result)
 
+    if "http" not in module.params.get("secretserver_base_url"):
+        module.fail_json(msg='You must specify the protocol used to connect to the SecretServer API (HTTP or HTTPS)', **result)
+
     action = module.params.get("action")
     if action == "get":
         if module.params.get("secret_id") is None or not int(module.params.get("secret_id")):
