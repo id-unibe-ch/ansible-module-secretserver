@@ -67,7 +67,7 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
   - **Type**: `int`
 
 - `folder_id`:
-  - **Description**: The ID of the folder you want to target. You can get the ID of a folder by looking at it in the Web UI. If the URL of the folder is `https://secretserver.example.com/SecretServer/app/#/secrets/view/folder/9876`, its ID is 9876. Required for the "upsert" action.
+  - **Description**: The ID of the folder you want to target. You can get the ID of a folder by looking at it in the Web UI. If the URL of the folder is `https://secretserver.example.com/SecretServer/app/#/secrets/view/folder/9876`, its ID is 9876. Required for the "upsert" action. Optional for the "search" action: if provided, the search will be restricted to that folder only.
   - **Required**: `false`
   - **Type**: `int`
 
@@ -332,6 +332,21 @@ If anyone wants to initialize a collection of our own, i'm ready for the PR.
     - name: dump the secret we got
       debug:
         var: get_secret
+
+    - name: Limit search for secrets within a specific folder_id
+      secretserver:
+        secretserver_password: "{{ vault_secretserver_password }}"
+        secretserver_username: "{{ vault_secretserver_username }}"
+        secretserver_base_url: "{{ secretserver_base_url }}"
+        action: search
+        search_text: "login"
+        folder_id: 999
+      register: folder_search_result
+      delegate_to: localhost
+
+    - name: dump the result
+      debug:
+        var: folder_search_result
 
     - name: Create a generic account
       secretserver:

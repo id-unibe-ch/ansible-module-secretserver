@@ -97,6 +97,7 @@ options:
             If the URL uf the folder is `https://secretserver.example.com/SecretServer/app/#/secrets/view/folder/9876`,
             its ID is 9876.
             Required for the "upsert" action.
+            Optional for the "search" action: if provided, the search will be scoped to that folder only.
         required: false
         type: int
     type: 
@@ -811,9 +812,10 @@ def get_secret_body(secret_name: str,
         "sessionRecordingEnabled": False
     }
 
-
-def search_by_name(client: Auth, search_text: str) -> Union[list, dict]:
+def search_by_name(client: Auth, search_text: str, folder_id: int = None) -> Union[list, dict]:
     url = f"{client.get_base_url()}api/v2/secrets?filter.searchText={search_text}"
+    if folder_id is not None:
+        url += f"&filter.folderId={folder_id}"
     response = requests.request("GET", url, headers=client.get_authenticated_headers(), data={})
     if response.status_code == 200:
         json_data = json.loads(response.text)
@@ -828,7 +830,6 @@ def search_by_name(client: Auth, search_text: str) -> Union[list, dict]:
                 "status": response.status_code,
                 "text": response.text
                 }
-
 
 def get_full_secret(client: Auth, secret_id: int) -> requests.Response:
     return requests.request(
@@ -1307,7 +1308,11 @@ def main():
             module.fail_json(msg=f"error getting secret {res}", **result)
 
     elif action == "search":
-        res = search_by_name(client=client, search_text=module.params.get("search_text"))
+        res = search_by_name(
+            client=client,
+            search_text=module.params.get("search_text"),
+            folder_id=module.params.get("folder_id")
+        )
         if res.get("success"):
             result["content"] = res.get("content")
             module.exit_json(**result)
